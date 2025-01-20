@@ -1,8 +1,13 @@
 # :fire::fire: Revamped ChatGPT Style Theme :fire::fire:
 
-### New CDN Link:
+### Latest CDN Link (New Repository):
 ```
 https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions/themes/gpt_style_theme.js
+```
+
+### Legacy CDN Link:
+```
+https://cdn.jsdelivr.net/gh/shaggy2626/awesome-typingmind/themes/gpt-style-theme/gpt_style_theme.js
 ```
 ---
 
