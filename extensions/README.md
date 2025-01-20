@@ -14,6 +14,13 @@ A powerful extension that adds a code insertion button to the TypingMind chat in
 
 ## Installation
 
+### Option 1: Direct CDN Link
+Add this URL to your TypingMind extensions:
+```
+https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions/extensions/insert_code_xml_creator.js
+```
+
+### Option 2: Manual Installation
 1. Copy the `insert_code_xml_creator.js` file to your TypingMind extensions directory
 2. Enable the extension in your TypingMind settings
 
