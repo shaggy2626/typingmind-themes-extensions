@@ -1,5 +1,11 @@
 # :fire::fire: Revamped ChatGPT Style Theme :fire::fire:
 
+### New CDN Link:
+```
+https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions/themes/gpt_style_theme.js
+```
+---
+
 ### I completely revamped the TypingMind interface with an extension that introduces a suite of enhancements and features to make it resemble ChatGPT more closely.
 To install you can use this extension link 
 https://cdn.jsdelivr.net/gh/shaggy2626/awesome-typingmind/themes/gpt-style-theme/gpt_style_theme.js
@@ -32,3 +38,50 @@ https://cdn.jsdelivr.net/gh/shaggy2626/awesome-typingmind/themes/gpt-style-theme
 
 - Assistant responses containing code are now styled with a lighter background and slim borders.
 - Code blocks now feature an improved appearance, making them more readable and visually integrated with the interface.
+
+## Features
+
+- 🎨 Clean and modern design
+- 💬 Enhanced chat bubbles
+- 🌓 Dark mode support
+- 📱 Responsive design
+- ⚡ Performance optimized
+- 🎯 Improved readability
+
+## Installation
+
+### Option 1: Direct CDN Link
+Add this URL to your TypingMind themes:
+```
+https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions/themes/gpt_style_theme.js
+```
+
+### Option 2: Manual Installation
+1. Copy the `gpt_style_theme.js` file to your TypingMind themes directory
+2. Enable the theme in your TypingMind settings
+
+## Features in Detail
+
+### Visual Enhancements
+- Modern chat bubble design
+- Improved typography and spacing
+- Enhanced color scheme
+- Better visual hierarchy
+
+### Responsive Design
+- Adapts to different screen sizes
+- Mobile-friendly layout
+- Consistent experience across devices
+
+### Performance
+- Optimized CSS
+- Minimal performance impact
+- Smooth transitions
+
+## Customization
+
+The theme can be customized by modifying the CSS variables in the theme file.
+
+## License
+
+MIT
