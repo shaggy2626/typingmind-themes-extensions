@@ -1,43 +1,38 @@
-# Insert Code XML Creator Extension for TypingMind
+# XML Tag Creator
 
-A powerful extension that adds a code insertion button to the TypingMind chat interface, allowing users to easily insert formatted code blocks with language detection and custom XML tags.
+I've developed a TypingMind plugin designed to simplify adding XML tags when pasting code. You can easily paste code into a popup box, which automatically generates XML tags and labels them based on the programming language. As you may know, when coding with Claude wrapping code in xml tags is crucial to ensure the best output from the AI. 
 
-### Disclaimer
-This extension is provided "as is" without any warranties. Use at your own risk. The creator is not responsible for any issues that may arise from using this extension.
+This plugin is ideal for anyone tired of manually adding XML tags when pasting code.
 
-## Features
-
-- 🎯 One-click code insertion button in the chat toolbar
-- 🔍 Automatic language detection using highlight.js
-- ✨ Support for 180+ programming languages
-- 🏷️ Custom XML tag creation
-- 💅 Syntax highlighting preview
-- 📝 Markdown-aware detection
-- 🎨 Modern and intuitive UI
-
-## Installation
-
-### Option 1: Direct CDN Link
+### Installation
 Add this URL to your TypingMind extensions:
 ```
 https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions/extensions/insert_code_xml_creator.js
 ```
 
-### Option 2: Manual Installation
-1. Copy the `insert_code_xml_creator.js` file to your TypingMind extensions directory
-2. Enable the extension in your TypingMind settings
+### Disclaimer
+This extension is provided "as is" without any warranties. Use at your own risk. The creator is not responsible for any issues that may arise from using this extension.
 
-## Usage
+## How it Works
 
-1. Click the code icon (<>) in the chat input toolbar
-2. Paste your code in the textarea
-3. The language will be automatically detected
-4. (Optional) Modify the language or add a custom XML tag
-5. Click "Insert Code" to add the formatted code block to your chat
+1. Click the "Insert Code" button which is after the Microphone icon in the text input box
+2. A popup window appears
+3. Paste your code into the text box
+4. Click "Insert Code" to insert it into your message
+5. The plugin detects the programming language and wraps your code in XML tags
+6. The formatted code is added right where your cursor is positioned
+
+## Features
+
+- 🎯 One-click code insertion from the chat toolbar
+- 🔍 Automatic language detection using highlight.js
+- ✨ Support for 180+ programming languages
+- 🏷️ Custom XML tag creation if needed
+- 💅 Clean and modern interface
 
 ## Supported Languages
 
-The extension supports all languages available in highlight.js, including but not limited to:
+The extension supports all major programming languages including:
 - JavaScript/TypeScript
 - Python
 - Java
@@ -46,44 +41,25 @@ The extension supports all languages available in highlight.js, including but no
 - Go
 - And 175+ more!
 
-## XML Tag Format
+## Example Output
 
-The extension creates XML tags in the following format:
-```
-<language_or_custom_tag>
-```code
-your code here
-```
-</language_or_custom_tag>
+When you paste this JavaScript code:
+```javascript
+console.log("Hello World");
 ```
 
-## Features in Detail
-
-### Automatic Language Detection
-- Uses highlight.js for accurate language detection
-- Special handling for Markdown content
-- Fallback to 'plaintext' when language cannot be determined
-
-### Custom Tags
-- Create custom XML tags for special use cases
-- Automatic sanitization of tag names
-- Preserves compatibility with XML specifications
-
-### UI Features
-- Modern modal interface
-- Real-time language detection display
-- Searchable language dropdown
-- Responsive design
-- Keyboard navigation support
+It becomes:
+```
+<javascript>
+```javascript
+console.log("Hello World");
+```
+</javascript>
+```
 
 ## Technical Details
 
-- No external dependencies required (highlight.js is loaded dynamically)
-- Lightweight implementation
-- Non-intrusive UI integration
-- Preserves chat input cursor position
-- Handles special characters and edge cases
-
-## License
-
-MIT 
+- Automatic language detection using highlight.js
+- Preserves your cursor position in the chat
+- No external dependencies (highlight.js is loaded on demand)
+- Lightweight and fast 
