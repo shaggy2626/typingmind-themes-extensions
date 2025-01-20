@@ -2,6 +2,9 @@
 
 A powerful extension that adds a code insertion button to the TypingMind chat interface, allowing users to easily insert formatted code blocks with language detection and custom XML tags.
 
+### Disclaimer
+This extension is provided "as is" without any warranties. Use at your own risk. The creator is not responsible for any issues that may arise from using this extension.
+
 ## Features
 
 - 🎯 One-click code insertion button in the chat toolbar

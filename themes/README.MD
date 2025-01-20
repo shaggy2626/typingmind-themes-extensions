@@ -7,6 +7,9 @@ https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions/themes/gpt_s
 ```
 ---
 
+### Disclaimer
+This theme is provided "as is" without any warranties. Use at your own risk. The creator is not responsible for any issues that may arise from using this theme.
+
 ### I completely revamped the TypingMind interface with an extension that introduces a suite of enhancements and features to make it resemble ChatGPT more closely.
 
 ## Key Highlights
