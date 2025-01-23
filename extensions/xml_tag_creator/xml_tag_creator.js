@@ -141,11 +141,16 @@
     async function loadHighlightJs() {
       if (window.hljsLoaded) return;
       try {
+        // Load highlight.js
         await loadScript('https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js');
         const style = document.createElement('link');
         style.rel = 'stylesheet';
         style.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/default.min.css';
         document.head.appendChild(style);
+        
+        // Load the line numbers plugin
+        await loadScript('https://cdn.jsdelivr.net/npm/highlightjs-line-numbers.js@2.8.0/dist/highlightjs-line-numbers.min.js');
+
         window.hljsLoaded = true;
       } catch (err) {
         console.error('Error loading highlight.js:', err);
@@ -179,11 +184,11 @@
   
     function isMarkdown(code) {
       const mdPatterns = {
-        headers: /^#{1,6}\s+\w+/m,
-        lists: /^[\s]*[-*+]\s+\w+/m,
-        blockquotes: /^>\s+\w+/m,
-        codeBlocks: /^```\w+/m,
-        tables: /^\|(?:.*\|)+\n\|(?:[-:]+\|)+$/m
+        headers: /^#{1,6}\\s+\\w+/m,
+        lists: /^[\\s]*[-*+]\\s+\\w+/m,
+        blockquotes: /^>\\s+\\w+/m,
+        codeBlocks: /^```\\w+/m,
+        tables: /^\\|(?:.*\\|)+\\n\\|(?:[-:]+\\|)+$/m
       };
   
       return Object.values(mdPatterns)
@@ -204,17 +209,26 @@
       return content;
     }
   
+    /**
+   * Instead of returning <tag>...</tag>, this function returns
+   * a markdown-formatted code block with triple backticks,
+   * including the language if detected.
+   */
     function buildFinalCodeBlock(rawTag, codeContent) {
       const finalTag = sanitizeXmlTag(rawTag);
-      const tripleQuotedCode = ['```', codeContent, '```'].join('\n');
-      return `<${finalTag}>\n${tripleQuotedCode}\n</${finalTag}>`;
+      return [
+        '```' + finalTag,
+        codeContent,
+        '```'
+      ].join('\\n');
     }
   
     function insertIntoChat(textbox, insertText) {
       const originalValue = textbox.value;
-      const newValue = originalValue.substring(0, state.cursorPosition) +
-                      insertText +
-                      originalValue.substring(state.cursorPosition);
+      const newValue = 
+        originalValue.substring(0, state.cursorPosition) +
+        insertText +
+        originalValue.substring(state.cursorPosition);
   
       setNativeValue(textbox, newValue);
   
@@ -223,6 +237,18 @@
       textbox.setSelectionRange(newCursorPos, newCursorPos);
     }
   
+    // This function updates the highlighted preview in real time
+    function updatePreview(previewCodeEl, codeText) {
+      // Clear previous code
+      previewCodeEl.textContent = codeText;
+      // Re-apply highlight
+      window.hljs.highlightElement(previewCodeEl);
+      // Add line numbers
+      if (window.hljs.lineNumbersBlock) {
+        window.hljs.lineNumbersBlock(previewCodeEl);
+      }
+    }
+
     // Modal handling
     async function handleInsertCodeClick() {
       const textbox = document.querySelector(SELECTORS.chatInput);
@@ -234,7 +260,7 @@
       state.cursorPosition = textbox.selectionStart;
   
       if (typeof hljs === 'undefined') {
-        await loadHighlightJs();
+        await loadHighlightJs();  // loads highlight.js and line numbers plugin
         if (typeof hljs === 'undefined') return;
       }
   
@@ -257,11 +283,11 @@
       const codeTextarea = document.createElement('textarea');
       Object.assign(codeTextarea.style, {
         width: '100%',
-        height: '200px',
+        height: '100px',
         fontFamily: 'Consolas, monospace',
         fontSize: '14px',
         padding: '15px',
-        marginBottom: '20px',
+        marginBottom: '10px',
         boxSizing: 'border-box',
         border: '1px solid #ccc',
         borderRadius: '8px'
@@ -269,6 +295,25 @@
       codeTextarea.placeholder = 'Paste your code here...';
       modalContent.appendChild(codeTextarea);
   
+      // Preview area (rich text)
+      const previewContainer = document.createElement('div');
+      Object.assign(previewContainer.style, {
+        width: '100%',
+        height: '200px',
+        marginBottom: '20px',
+        border: '1px solid #ccc',
+        borderRadius: '8px',
+        overflow: 'auto',
+        backgroundColor: '#f5f5f5'
+      });
+
+      const previewPre = document.createElement('pre');
+      const previewCode = document.createElement('code');
+      previewCode.className = 'hljs';
+      previewPre.appendChild(previewCode);
+      previewContainer.appendChild(previewPre);
+      modalContent.appendChild(previewContainer);
+
       // Language container
       const languageContainer = document.createElement('div');
       Object.assign(languageContainer.style, {
@@ -409,11 +454,14 @@
         if (!codeText.trim()) {
           state.selectedLanguage = 'plaintext';
           detectedLabel.textContent = 'Detected Language: None';
-          return;
+          previewCode.textContent = '';
+        } else {
+          const detected = detectLanguage(codeText);
+          state.selectedLanguage = detected;
+          detectedLabel.textContent = 'Detected Language: ' + detected;
+          // Update the preview
+          updatePreview(previewCode, codeText);
         }
-        const detected = detectLanguage(codeText);
-        state.selectedLanguage = detected;
-        detectedLabel.textContent = 'Detected Language: ' + detected;
       });
   
       // Buttons container
