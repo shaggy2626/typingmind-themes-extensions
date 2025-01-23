@@ -10,9 +10,6 @@ Add this URL to your TypingMind extensions:
 https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions/extensions/xml_tag_creator/xml_tag_creator.js
 ```
 
-### Disclaimer
-This extension is provided "as is" without any warranties. Use at your own risk. The creator is not responsible for any issues that may arise from using this extension.
-
 ## How it Works
 
 1. Click the "Insert Code" button which is after the Microphone icon in the text input box
@@ -21,45 +18,6 @@ This extension is provided "as is" without any warranties. Use at your own risk.
 4. Click "Insert Code" to insert it into your message
 5. The plugin detects the programming language and wraps your code in XML tags
 6. The formatted code is added right where your cursor is positioned
-
-## Features
-
-- 🎯 One-click code insertion from the chat toolbar
-- 🔍 Automatic language detection using highlight.js
-- ✨ Support for 180+ programming languages
-- 🏷️ Custom XML tag creation if needed
-- 💅 Clean and modern interface
-
-## Supported Languages
-
-The extension supports all major programming languages including:
-- JavaScript/TypeScript
-- Python
-- Java
-- C/C++
-- Ruby
-- Go
-- And 175+ more!
-
-## Example Output
-
-When you paste this JavaScript code:
-```javascript
-console.log("Hello World");
-```
-
-It becomes:
-```
-<javascript>
-```javascript
-console.log("Hello World");
-```
-</javascript>
-```
-
-## Technical Details
-
-- Automatic language detection using highlight.js
-- Preserves your cursor position in the chat
-- No external dependencies (highlight.js is loaded on demand)
-- Lightweight and fast 
+   
+### Disclaimer
+This extension is provided "as is" without any warranties. Use at your own risk. The creator is not responsible for any issues that may arise from using this extension.
