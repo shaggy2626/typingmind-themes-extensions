@@ -20,11 +20,17 @@
           if (!body.model?.includes('deepseek')) {
             return originalFetch.apply(this, args);
           }
+          
+          // Check if this is a title generation request
+          const isTitleRequest = body.messages?.[body.messages.length - 1]?.content?.includes('What would be a short and relevant title for this chat?');
+          if (isTitleRequest) {
+            return originalFetch.apply(this, args);
+          }
         } catch {
           return originalFetch.apply(this, args);
         }
   
-        // If we get here, it's definitely a Deepseek call
+        // If we get here, it's definitely a Deepseek call (but not a title request)
         const response = await originalFetch.apply(this, args);
       
         // Handle streaming response
@@ -33,6 +39,7 @@
           const decoder = new TextDecoder();
           let buffer = '';
           let contentStarted = false;
+          let reasoningEnded = false;
           let lastWasNewline = false;
           
           const stream = new ReadableStream({
@@ -64,15 +71,15 @@
                           // If there's reasoning content, convert it to regular content
                           if (delta.reasoning_content) {
                             if (!contentStarted) {
-                              // Add initial quote prefix
-                              const headerData = {
+                              // Add thinking start header
+                              const thinkingHeader = {
                                 ...data,
                                 choices: [{
                                   ...data.choices[0],
-                                  delta: { content: "> " }
+                                  delta: { content: "💭 Thinking...\n\n> " }
                                 }]
                               };
-                              controller.enqueue(textEncoder.encode(`data: ${JSON.stringify(headerData)}\n\n`));
+                              controller.enqueue(textEncoder.encode(`data: ${JSON.stringify(thinkingHeader)}\n\n`));
                               contentStarted = true;
                             }
                             
@@ -95,17 +102,17 @@
                             controller.enqueue(textEncoder.encode(`data: ${JSON.stringify(modifiedData)}\n\n`));
                           } 
                           // If it's regular content and we're switching from reasoning
-                          else if (delta.content && !contentStarted) {
-                            // Add separator between reasoning and response
+                          else if (delta.content && !reasoningEnded) {
+                            // Add thinking complete and separator
                             const separatorData = {
                               ...data,
                               choices: [{
                                 ...data.choices[0],
-                                delta: { content: "\n\n---\n\n" }
+                                delta: { content: "\n\nThinking complete\n\n---\n\n" }
                               }]
                             };
                             controller.enqueue(textEncoder.encode(`data: ${JSON.stringify(separatorData)}\n\n`));
-                            contentStarted = true;
+                            reasoningEnded = true;
                             controller.enqueue(textEncoder.encode(line + '\n'));
                           } else {
                             controller.enqueue(textEncoder.encode(line + '\n'));
