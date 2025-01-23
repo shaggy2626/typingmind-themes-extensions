@@ -7,7 +7,7 @@ This plugin is ideal for anyone tired of manually adding XML tags when pasting c
 ### Installation
 Add this URL to your TypingMind extensions:
 ```
-https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions/extensions/insert_code_xml_creator.js
+https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions/extensions/xml_tag_creator/xml_tag_creator.js
 ```
 
 ### Disclaimer

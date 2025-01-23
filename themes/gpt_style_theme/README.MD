@@ -3,7 +3,7 @@
 ### Installation
 Add this URL to your TypingMind themes:
 ```
-https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions/themes/gpt_style_theme.js
+https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions/themes/gpt_style_theme/gpt_style_theme.js
 ```
 ---
 
