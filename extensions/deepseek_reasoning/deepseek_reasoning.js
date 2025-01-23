@@ -51,6 +51,12 @@
                   for (const line of lines) {
                     if (line.startsWith('data: ')) {
                       try {
+                        // Skip the [DONE] message
+                        if (line.includes('[DONE]')) {
+                          controller.enqueue(textEncoder.encode(line + '\n'));
+                          continue;
+                        }
+                        
                         const data = JSON.parse(line.slice(6));
                         if (data?.choices?.[0]?.delta) {
                           const delta = data.choices[0].delta;
