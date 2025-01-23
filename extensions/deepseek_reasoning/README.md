@@ -54,6 +54,11 @@ You'll see:
 Here's how to write a Python script...
 ```
 
+
+https://github.com/user-attachments/assets/4da22922-da0c-4709-bdf4-fba10a078988
+
+
+
 ## Requirements
 
 - Only works with Deepseek models
