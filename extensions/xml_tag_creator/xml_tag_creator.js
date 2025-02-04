@@ -184,11 +184,11 @@
   
     function isMarkdown(code) {
       const mdPatterns = {
-        headers: /^#{1,6}\\s+\\w+/m,
-        lists: /^[\\s]*[-*+]\\s+\\w+/m,
-        blockquotes: /^>\\s+\\w+/m,
-        codeBlocks: /^```\\w+/m,
-        tables: /^\\|(?:.*\\|)+\\n\\|(?:[-:]+\\|)+$/m
+        headers: /^#{1,6}\s+\w+/m,
+        lists: /^[\s]*[-*+]\s+\w+/m,
+        blockquotes: /^>\s+\w+/m,
+        codeBlocks: /^```\w+/m,
+        tables: /^\|(?:.*\|)+\n\|(?:[-:]+\|)+$/m
       };
   
       return Object.values(mdPatterns)
@@ -220,7 +220,7 @@
         '```' + finalTag,
         codeContent,
         '```'
-      ].join('\\n');
+      ].join('\n');
     }
   
     function insertIntoChat(textbox, insertText) {
