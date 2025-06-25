@@ -6,15 +6,15 @@
  *
  * Key Features
  * ------------
- * • Adds a “Wrap in XML Tag” button to the chat-input toolbar.  
+ * • Adds a "Wrap in XML Tag" button to the chat-input toolbar.  
  * • Opens a modal where you:
  *     – Type or click one of your 10 most-recent tags (stored in localStorage).  
  *     – Paste or type the content to wrap.  
  *     – Optionally toggle CDATA wrapping.  
  * • Sanitises tag names (lowercase; letters, numbers, hyphens, underscores; 
- *   prefixes invalid starts with “_”) to ensure valid XML.  
+ *   prefixes invalid starts with "_") to ensure valid XML.  
  * • Inserts the formatted block at the cursor and fires real input events so
- *   TypingMind’s React UI updates instantly.  
+ *   TypingMind's React UI updates instantly.  
  * • MutationObserver re-injects the toolbar button if the UI rerenders.
  *
  * Perfect for creating consistent, well-structured prompts without manually
@@ -29,17 +29,33 @@
     static MAX_RECENTS   = 10;
 
     /* ─── Static helpers ──────────────────── */
-    static sanitize(tag = '') {
+    /**
+     * Normalises a raw string so it is safe for use as an XML tag name.
+     *
+     * @param {string} tag        Raw user input.
+     * @param {boolean} trimEdges When true (default) leading/trailing
+     *                            underscores produced by the replacement
+     *                            step are removed. Pass false while the user
+     *                            is typing so that underscores replacing
+     *                            spaces are visible immediately.
+     */
+    static sanitize(tag = '', trimEdges = true) {
       let clean = tag
         .toLowerCase()
+        // replace invalid characters (including space) with underscore
         .replace(/[^a-z0-9_-]+/g, '_')
-        .replace(/^_+|_+$/g, '');
+        // collapse multiple underscores that may appear after successive
+        // space-presses (or other invalid chars) into a single one
+        .replace(/_+/g, '_');
+
+      if (trimEdges) clean = clean.replace(/^_+|_+$/g, '');
+
       if (!clean || clean === 'code') return '';
       if (clean.startsWith('xml') || !/^[a-z_]/.test(clean)) clean = `_${clean}`;
       return clean;
     }
 
-    /** Sets value on controlled <textarea>/<input> and triggers React’s onChange */
+    /** Sets value on controlled <textarea>/<input> and triggers React's onChange */
     static setValue(el, v) {
       const setter = Object.getOwnPropertyDescriptor(el.__proto__, 'value')?.set;
       setter ? setter.call(el, v) : (el.value = v);
@@ -57,9 +73,11 @@
       };
 
       this.state = {
-        useCDATA : false,
-        recent   : this.loadRecents(),
-        overlay  : null
+        useCDATA     : false,
+        useCodeBlock : false,
+        codeLang     : '',
+        recent       : this.loadRecents(),
+        overlay      : null
       };
 
       this.init();
@@ -92,6 +110,11 @@
 
     /* ─── Modal UI ────────────────────────── */
     buildModal() {
+      // Reset state for a fresh modal
+      this.state.useCodeBlock = true;
+      this.state.useCDATA = false;
+      this.state.codeLang = '';
+
       /* shell */
       const overlay = this.el('div',
         'fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center');
@@ -109,11 +132,44 @@
 
       modal.append(tag, hint);
 
+      /* space-to-underscore (fast path) */
+      tag.addEventListener('keydown', e => {
+        if (e.key !== ' ') return;
+        e.preventDefault();
+
+        const { selectionStart, selectionEnd, value } = tag;
+
+        // If the character immediately before the caret is already an underscore
+        // we don't need (or want) another one.
+        if (selectionStart === selectionEnd && value[selectionStart - 1] === '_') {
+          return;
+        }
+
+        const newVal = value.slice(0, selectionStart) + '_' + value.slice(selectionEnd);
+        tag.value = newVal;
+
+        const cur = selectionStart + 1;
+        tag.setSelectionRange(cur, cur);
+
+        // Trigger the input listener manually so the hint visibility updates.
+        tag.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+
       /* recent tags – TOP position */
       if (this.state.recent.length) {
         const wrap = this.el('div', 'mb-4');
-        wrap.append(this.el('div',
-          'text-xs text-slate-500 dark:text-slate-400 mb-2', 'Recent tags:'));
+        const header = this.el('div', 'flex justify-between items-center mb-2');
+        const label = this.el('div', 'text-xs text-slate-500 dark:text-slate-400', 'Recent tags:');
+        const clearBtn = this.el('button', 'text-xs text-blue-600 dark:text-blue-400 hover:underline', 'Clear');
+        clearBtn.type = 'button';
+        clearBtn.onclick = () => {
+          this.state.recent = [];
+          this.saveRecents();
+          wrap.remove();
+        };
+        header.append(label, clearBtn);
+        wrap.append(header);
+
         const cloud = this.el('div', 'flex flex-wrap gap-2');
         this.state.recent.forEach(t => {
           const b = this.el('button',
@@ -134,16 +190,31 @@
 
       /* footer */
       const foot  = this.el('div', 'flex items-center justify-between');
-      const toggleBox = this.el('div','flex items-center');
+      const toggleContainer = this.el('div', 'flex flex-col gap-2');
+
+      /* -- Row 1: Code block -- */
+      const codeBlockRow = this.el('div', 'flex items-center gap-2');
+      const bIn   = this.el('input','h-4 w-4 cursor-pointer','', { type:'checkbox', id:'codeblock' });
+      bIn.checked = this.state.useCodeBlock;
+      const bLab  = this.el('label','text-sm cursor-pointer','Code block',{ for:'codeblock' });
+      const langIn = this.el('input','w-20 p-1 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-md text-xs','', { placeholder:'lang' });
+      langIn.value = this.state.codeLang;
+      langIn.style.display = this.state.useCodeBlock ? '' : 'none';
+      codeBlockRow.append(bLab, bIn, langIn);
+
+      /* -- Row 2: CDATA -- */
+      const cdataRow = this.el('div', 'flex items-center gap-2');
       const cIn   = this.el('input','h-4 w-4 cursor-pointer','', { type:'checkbox', id:'cdata' });
       cIn.checked = this.state.useCDATA;
-      const cLab  = this.el('label','text-sm mr-2 cursor-pointer','Use CDATA:',{ for:'cdata' });
-      toggleBox.append(cLab,cIn);
+      const cLab  = this.el('label','text-sm cursor-pointer','CDATA',{ for:'cdata' });
+      cdataRow.append(cLab, cIn);
+
+      toggleContainer.append(codeBlockRow, cdataRow);
 
       const insert = this.el('button',
         'px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700',
         'Insert');
-      foot.append(toggleBox, insert);
+      foot.append(toggleContainer, insert);
       modal.append(foot);
 
       /* mount + events */
@@ -151,24 +222,42 @@
       this.state.overlay = overlay;
       tag.focus();
 
-      /* live validation */
+      /* live validation: keep underscores visible while typing */
       tag.addEventListener('input', () => {
-        const clean = XmlTagCreator.sanitize(tag.value);
+        const clean = XmlTagCreator.sanitize(tag.value, false);
         if (tag.value !== clean) tag.value = clean;
         hint.classList.toggle('hidden', !tag.value);
       });
 
-      /* toggle */
-      cIn.onchange = e => (this.state.useCDATA = e.target.checked);
+      /* tab handler */
+      tag.addEventListener('keydown', e => {
+        if (e.key === 'Tab' && !e.shiftKey) {
+          e.preventDefault();
+          code.focus();
+        }
+      });
+
+      /* toggle listeners */
+      cIn.onchange   = e => (this.state.useCDATA     = e.target.checked);
+      bIn.onchange   = e => {
+        this.state.useCodeBlock = e.target.checked;
+        langIn.style.display = this.state.useCodeBlock ? '' : 'none';
+      };
+      langIn.oninput = e => (this.state.codeLang     = e.target.value.trim());
 
       /* insert logic */
       const doInsert = () => {
         if (!code.value.trim()) return alert('Please paste your code.');
         const xmlTag  = XmlTagCreator.sanitize(tag.value) || 'code';
         this.pushRecent(xmlTag);
+        let inner = code.value;
+        if (this.state.useCodeBlock) {
+          const lang = this.state.codeLang || '';
+          inner = '```' + lang + '\n' + inner + '\n```';
+        }
         const snippet = this.state.useCDATA
-          ? `<${xmlTag}>\n<![CDATA[\n${code.value}\n]]>\n</${xmlTag}>`
-          : `<${xmlTag}>\n${code.value}\n</${xmlTag}>`;
+          ? `<${xmlTag}>\n<![CDATA[\n${inner}\n]]>\n</${xmlTag}>`
+          : `<${xmlTag}>\n${inner}\n</${xmlTag}>`;
 
         const tb = document.querySelector(this.sel.chatInput);
         if (!tb) return;
