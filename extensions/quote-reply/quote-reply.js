@@ -44,7 +44,7 @@
         // Creates and appends the 'Quote' popover button to the DOM.
         createPopover() {
             const popover = document.createElement("button");
-            popover.className = "fixed rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 shadow-lg p-1.5 cursor-pointer z-50 flex items-center justify-center w-auto h-auto transition-all";
+            popover.className = "fixed rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 shadow-lg p-1.5 cursor-pointer z-50 flex items-center justify-center w-auto h-auto";
             popover.innerHTML = `
                 <div class="flex items-center justify-center px-2 py-1">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-1">
@@ -80,11 +80,37 @@
             this.state.selectedText = this.getSelectionText();
 
             if (this.state.selectedText) {
-                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-                const popoverRect = this.popover.getBoundingClientRect();
-                this.popover.style.left = `${this.state.mouseX - popoverRect.width / 2}px`;
-                this.popover.style.top = `${scrollTop + this.state.mouseY - popoverRect.height - 10}px`;
+                const scrollTop  = window.pageYOffset || document.documentElement.scrollTop;
+                const GAP        = 20; // pixels between cursor and popover
+
+                // Show popover first to get accurate dimensions
                 this.popover.style.display = "flex";
+                this.popover.style.visibility = "hidden"; // Hide while positioning
+                
+                // Force reflow to ensure dimensions are calculated
+                void this.popover.offsetHeight;
+
+                const popoverRect = this.popover.getBoundingClientRect();
+
+                // Position the popover so its bottom edge is GAP pixels above the cursor
+                let left = this.state.mouseX - popoverRect.width / 2;
+                let top  = scrollTop + this.state.mouseY - popoverRect.height - GAP;
+
+                // If there isn't enough space above, place it below the cursor instead
+                if (top < scrollTop) {
+                    top = scrollTop + this.state.mouseY + GAP;
+                }
+
+                // Ensure the popover doesn't go off the left/right edges of the screen
+                const windowWidth = window.innerWidth;
+                if (left < 0) left = 0;
+                if (left + popoverRect.width > windowWidth) {
+                    left = windowWidth - popoverRect.width - 10;
+                }
+
+                this.popover.style.left = `${left}px`;
+                this.popover.style.top  = `${top}px`;
+                this.popover.style.visibility = "visible"; // Now show it
             } else {
                 this.hidePopover();
             }

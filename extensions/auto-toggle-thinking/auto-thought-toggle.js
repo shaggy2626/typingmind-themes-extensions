@@ -11,6 +11,9 @@
       /* static config */
       STORAGE = 'autoThoughtToggle_enabled';
       BTN_ID  = 'auto-thought-toggle-button';
+      /* checkbox icons */
+      CHECKED_SVG   = '<svg class="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="4" stroke="currentColor" stroke-width="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      UNCHECKED_SVG = '<svg class="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="4" stroke="currentColor" stroke-width="2"/></svg>';
       SEL = {
         thought  : '[data-element-id="ai-response"] details',
         content  : '[data-element-id="ai-response"]>*:not(details):not([data-element-id="additional-actions-of-response-container"])',
@@ -19,8 +22,8 @@
       };
   
       constructor() {
-        /* read persisted state */
-        this.enabled = localStorage.getItem(this.STORAGE) !== 'false';
+        /* read persisted state as real boolean, defaulting to true */
+        this.enabled = JSON.parse(localStorage.getItem(this.STORAGE) ?? 'true');
         this.#init();
       }
   
@@ -28,11 +31,21 @@
       #init() {
         console.log(`[AutoThoughtToggle] ${this.enabled ? 'Enabled' : 'Disabled'}.`);
   
-        /* DOM observer */
-        new MutationObserver(() => {
-          this.#autoToggle();
-          if (!document.getElementById(this.BTN_ID)) this.#injectButton();
-        }).observe(document.body, {childList:true,subtree:true,characterData:true});
+        /* DOM observer with light throttling */
+        this._pending = false;
+        this.observer = new MutationObserver(() => {
+          if (this._pending) return;
+          this._pending = true;
+          setTimeout(() => {
+            this._pending = false;
+            this.#autoToggle();
+            if (!document.getElementById(this.BTN_ID)) this.#injectButton();
+          }, 100); // 100ms debounce to reduce frequent scans
+        });
+        this.observer.observe(document.body, {childList:true,subtree:true});
+  
+        /* cleanup to avoid duplicate observers on navigation */
+        window.addEventListener('beforeunload', () => this.observer.disconnect());
   
         /* console helpers */
         window.autoThoughtToggle = {
@@ -45,7 +58,7 @@
       /** change feature state & UI */
       #setState(on) {
         this.enabled = on;
-        localStorage.setItem(this.STORAGE,on);
+        localStorage.setItem(this.STORAGE, JSON.stringify(on));
         console.log(`[AutoThoughtToggle] ${on?'Enabled':'Disabled'}.`);
         this.#updateButtonIcon();
       }
@@ -147,9 +160,7 @@
         const svg  = box?.querySelector('svg');
         if (!svg) return;
   
-        svg.outerHTML = this.enabled
-          ? '<svg class="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="4" stroke="currentColor" stroke-width="2"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-          : '<svg class="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="4" stroke="currentColor" stroke-width="2"/></svg>';
+        svg.outerHTML = this.enabled ? this.CHECKED_SVG : this.UNCHECKED_SVG;
       }
     }
   
