@@ -111,7 +111,7 @@
     /* ─── Modal UI ────────────────────────── */
     buildModal() {
       // Reset state for a fresh modal
-      this.state.useCodeBlock = true;
+      this.state.useCodeBlock = false;
       this.state.useCDATA = false;
       this.state.codeLang = '';
 
