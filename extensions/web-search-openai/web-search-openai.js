@@ -1,6 +1,6 @@
 /* ============================================================================
- * TypingMind – Web Search Tool Injection (2025-01-14)
- * Plain JS extension (no Tampermonkey). Injects OpenAI web_search_preview tool
+ * TypingMind – Web Search Tool Injection (2025-08-15)
+ * Injects OpenAI web_search_preview tool
  * for GPT‑5 models based on reasoning effort and user settings.
  * ========================================================================== */
 
