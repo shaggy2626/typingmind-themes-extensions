@@ -125,6 +125,8 @@
       const shouldInclude = enabledByUser && isValidEffort;
       
       // If it shouldn't be present, remove it
+      // Note: We only remove the web_search_preview entry and leave the
+      // rest of payload.tools untouched. We never clear or recreate the array.
       if (!shouldInclude && hasWebSearch) {
         payload.tools.splice(webSearchIndex, 1);
         return { payload, modified: true };
