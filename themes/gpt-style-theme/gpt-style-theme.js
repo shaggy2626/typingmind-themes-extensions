@@ -78,6 +78,14 @@
       [data-element-id="chat-space-middle-part"] .prose.max-w-full *:not( pre, pre *, code, code *, .flex.items-start.justify-center.flex-col.gap-2 *, .text-xs.text-gray-500.truncate, .italic.truncate.hover\\:underline, h1, h2, h3, h4, h5, h6, strong, b ),
       [data-element-id="chat-space-middle-part"] [data-element-id="user-message"] > div { font-family: ${CONFIG.fonts.primary} !important; font-size: 16px !important; line-height: 24px !important; color: ${CONFIG.colors.text} !important; font-weight: ${CONFIG.fonts.weights.normal} !important; }
       [data-element-id="chat-space-middle-part"] .prose.max-w-full, [data-element-id="chat-space-middle-part"] [data-element-id="user-message"] { font-family: ${CONFIG.fonts.primary} !important; font-size: 16px !important; line-height: 24px !important; color: ${CONFIG.colors.text} !important; font-weight: ${CONFIG.fonts.weights.normal} !important; }
+      /* Improve visual crispness similar to ChatGPT */
+      [data-element-id="chat-space-middle-part"] .prose.max-w-full {
+        -webkit-font-smoothing: antialiased !important;
+        -moz-osx-font-smoothing: grayscale !important;
+        text-rendering: optimizeLegibility !important;
+        letter-spacing: -0.005em !important;
+        font-weight: ${CONFIG.fonts.weights.normal} !important;
+      }
       [data-element-id="chat-space-middle-part"] .text-xs.text-gray-500.truncate, [data-element-id="chat-space-middle-part"] .italic.truncate.hover\\:underline, [data-element-id="chat-space-middle-part"] .flex.items-start.justify-center.flex-col.gap-2 { font-size: unset !important; line-height: unset !important; font-family: unset !important; color: unset !important; font-weight: unset !important; }
       [data-element-id="chat-space-middle-part"] [data-element-id="response-block"]:has([data-element-id="user-message"]) [data-element-id="chat-avatar-container"] { display: none !important; }
       [data-element-id="chat-space-middle-part"] [data-element-id="user-message"] { margin-left: auto !important; margin-right: 0 !important; display: block !important; max-width: 70% !important; border-radius: ${CONFIG.borderRadius.large} !important; background-color: ${CONFIG.colors.input.background} !important; color: ${CONFIG.colors.text} !important; padding: ${CONFIG.spacing.small} !important; margin-bottom: ${CONFIG.spacing.small} !important; }
