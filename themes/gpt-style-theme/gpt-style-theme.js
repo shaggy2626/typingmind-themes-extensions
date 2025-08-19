@@ -120,6 +120,9 @@
       [data-element-id="chat-input-actions"] { padding: 0.5rem 0.75rem !important; }
       [data-element-id="send-button"], [data-element-id="more-options-button"] { background-color: ${CONFIG.colors.button.primary} !important; border-color: ${CONFIG.colors.button.primary} !important; }
       [data-element-id="send-button"]:hover, [data-element-id="more-options-button"]:hover { background-color: ${CONFIG.colors.button.hover} !important; border-color: ${CONFIG.colors.button.hover} !important; }
+      /* Regenerate button (tagged via JS below) */
+      button[data-gpt-theme-regenerate="1"] { background-color: ${CONFIG.colors.button.primary} !important; border-color: ${CONFIG.colors.button.primary} !important; color: #fff !important; }
+      button[data-gpt-theme-regenerate="1"]:hover { background-color: ${CONFIG.colors.button.hover} !important; border-color: ${CONFIG.colors.button.hover} !important; }
     `;
     document.head.appendChild(inputStyle);
 
@@ -188,6 +191,21 @@
         document.querySelectorAll(`${SELECTORS.AI_RESPONSE_BLOCK} ${SELECTORS.RESULT_BLOCKS}`).forEach(preEl => { if (preEl.closest('.editing')) return; const container = preEl.closest('.pb-6'); if (container) container.style.overflowX = 'auto'; });
     }
 
+    // Tag and style the "Regenerate" button so it uses the theme's black styling.
+    function styleRegenerateButtons(scope = document) {
+        Utils.safe(() => {
+            const buttons = scope.querySelectorAll('button');
+            buttons.forEach(btn => {
+                if (btn.dataset.gptThemeRegenerate === '1') return;
+                const label = (btn.textContent || '').trim().toLowerCase();
+                if (!label) return;
+                if (label.includes('regenerate')) {
+                    btn.setAttribute('data-gpt-theme-regenerate', '1');
+                }
+            });
+        }, 'styleRegenerateButtons');
+    }
+
     /**
      * ----------------------------
      * 8) Main Display Handler
@@ -200,6 +218,7 @@
                 scope.querySelectorAll(SELECTORS.USER_MESSAGE_BLOCK).forEach(msg => { if (msg.closest('.editing') || msg.hasAttribute('data-processed')) return; styleUserMessageEl(msg); });
                 scope.querySelectorAll(SELECTORS.CODE_BLOCKS).forEach(code => { if (!code.closest('.editing')) handleJsonCodeBlock(code); });
                 styleSandboxOutputs();
+                styleRegenerateButtons(scope);
             }, 'improveTextDisplay'),
         350
     );
