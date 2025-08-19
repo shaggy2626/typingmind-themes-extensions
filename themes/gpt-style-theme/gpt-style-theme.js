@@ -255,6 +255,8 @@
                     if (requiresVisualUpdate) break;
                 }
                 if (requiresVisualUpdate) {
+                    // Apply button styling immediately to avoid flicker
+                    styleRegenerateButtons(document);
                     improveTextDisplay();
                 }
             });
@@ -262,10 +264,14 @@
         };
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
+                // Immediate scan to style Regenerate before debounced work runs
+                styleRegenerateButtons(document);
                 improveTextDisplay();
                 observeDomChanges();
             });
         } else {
+            // Immediate scan to style Regenerate before debounced work runs
+            styleRegenerateButtons(document);
             improveTextDisplay();
             observeDomChanges();
         }
