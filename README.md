@@ -156,3 +156,22 @@ Enable OpenAI's browsing automatically when using GPT‑5 models. This extension
 - **When it turns on:** Applies only if the model is GPT‑5 and reasoning effort is **Low/Medium/High**. OpenAI does not support Web Search when reasoning is **Minimal**, so the tool will not be added (and is removed if present). 
 - **Tool safety:** Only adds/updates/removes the `web_search_preview` tool; all other tools remain untouched. Updates existing entries even if wrapped or named differently to avoid duplicates.
 - **Local storage used:** `1stop-web-search-context` (`off|low|medium|high`) and `1stop-web-search-timezone` (IANA timezone).
+
+---
+
+### 6. Image Viewer
+
+**File:** [`extensions/image-viewer/image-viewer.js`](./extensions/image-viewer/image-viewer.js)
+
+**Extension URL:**
+```
+https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions@latest/extensions/image-viewer/image-viewer.js
+```
+
+This extension upgrades the default image viewing experience by adding a powerful, full-screen gallery and convenient download options. Click any image to open it in a responsive viewer that lets you zoom and pan, then save it with a custom-formatted filename.
+
+**Features:**
+- **Click to Enlarge:** Opens any chat image in a full-screen PhotoSwipe gallery.
+- **Hover Download Button:** A quick-access download button appears when you hover over any image.
+- **Gallery Download Button:** A download icon in the gallery's top toolbar adapts its color to the image background, just like the "Close" button.
+- **Custom Filenames:** Automatically saves images with a clean, timestamped name (e.g., `img123-08-15-24-10-30.png`).
