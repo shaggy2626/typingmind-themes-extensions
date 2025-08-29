@@ -48,30 +48,108 @@
     return `img${rnd}-${mm}-${dd}-${yy}-${HH}-${MM}${ext}`;
     },
 
-    downloadImage: (srcUrl) => {
+        async downloadImage(srcUrl) {
+      try {
+        // For authenticated URLs or CORS-protected images, fetch first
+        const response = await fetch(srcUrl);
+        if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
+        
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        
     const a = document.createElement('a');
-    a.href = srcUrl;
-      a.download = Utils.generateFilename(Utils.getFileExt(srcUrl));
+        a.href = blobUrl;
+        a.download = Utils.generateFilename(Utils.getFileExt(srcUrl));
     a.rel = 'noopener';
     document.body.appendChild(a);
     a.click();
     a.remove();
+        
+        // Clean up the blob URL after a short delay
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+        return true;
+        
+      } catch (error) {
+        console.error('[TM Image Viewer] Download failed, trying direct method:', error);
+        
+        // Fallback: try direct download (for non-authenticated URLs)
+        try {
+          const a = document.createElement('a');
+          a.href = srcUrl;
+          a.download = Utils.generateFilename(Utils.getFileExt(srcUrl));
+          a.rel = 'noopener';
+          a.target = '_blank'; // Open in new tab if download fails
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          return true;
+        } catch (fallbackError) {
+          console.error('[TM Image Viewer] Direct download also failed:', fallbackError);
+          // Last resort: open image in new tab
+          window.open(srcUrl, '_blank');
+          return false; // Indicate that actual download failed
+        }
+      }
     },
 
     async copyImage(srcUrl) {
       try {
-        if (window.ClipboardItem) {
-          const response = await fetch(srcUrl);
-          const blob = await response.blob();
-          await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
-        } else {
+        if (!window.ClipboardItem) {
+          // Fallback: copy URL to clipboard
           await navigator.clipboard.writeText(srcUrl);
+          return true;
         }
+
+        // Try to fetch and copy image
+        const response = await fetch(srcUrl);
+        if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
+        
+        const blob = await response.blob();
+        
+        // Convert to PNG if not supported format (fixes jpeg issue)
+        if (blob.type === 'image/jpeg' || blob.type === 'image/webp' || blob.type === 'image/gif') {
+          const pngBlob = await this.convertToPNG(blob);
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+        } else {
+          // Try original format first
+          await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+        }
+        
         return true;
       } catch (error) {
         console.error('[TM Image Viewer] Copy failed:', error);
-        return false;
+        
+        // Final fallback: copy URL
+        try {
+          await navigator.clipboard.writeText(srcUrl);
+          return true;
+        } catch (urlError) {
+          console.error('[TM Image Viewer] URL copy also failed:', urlError);
+          return false;
+        }
       }
+    },
+
+    // Convert image to PNG format using canvas (more compatible with clipboard)
+    async convertToPNG(blob) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || img.width;
+          canvas.height = img.naturalHeight || img.height;
+          
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          
+          canvas.toBlob(resolve, 'image/png');
+        };
+        
+        img.onerror = reject;
+        img.src = URL.createObjectURL(blob);
+      });
     }
   };
 
@@ -114,16 +192,16 @@
         const module = await import(CONFIG.photoswipe.esmUrl);
         this.photoSwipe = module.default;
         return this.photoSwipe;
-      })();
+    })();
 
       return this.photoSwipePromise;
     }
 
     static preloadSoon() {
       const start = () => this.loadPhotoSwipe().catch(() => {});
-      if ('requestIdleCallback' in window) requestIdleCallback(start, { timeout: 3000 });
-      else setTimeout(start, 300);
-    }
+    if ('requestIdleCallback' in window) requestIdleCallback(start, { timeout: 3000 });
+    else setTimeout(start, 300);
+  }
   }
 
   // ============================== Main Image Viewer Class ==============================
@@ -148,21 +226,21 @@
 
     // Image detection methods
     isViewableImage(el) {
-      if (!el || el.tagName !== 'IMG') return false;
-      const inMessage = !!el.closest('[data-element-id="ai-response"], [data-element-id="user-message"], .dynamic-chat-content-container');
+    if (!el || el.tagName !== 'IMG') return false;
+    const inMessage = !!el.closest('[data-element-id="ai-response"], [data-element-id="user-message"], .dynamic-chat-content-container');
       const isAttachment = !!el.closest(CONFIG.selectors.attachment);
-      if (!inMessage && !isAttachment) return false;
+    if (!inMessage && !isAttachment) return false;
       if (el.closest(CONFIG.selectors.excludeParents)) return false;
       
       const classes = el.className || '';
       if (CONFIG.detection.excludeClasses.some(cls => classes.includes(cls))) return false;
-      if (isAttachment) return true;
+    if (isAttachment) return true;
       
-      const rect = el.getBoundingClientRect();
+    const rect = el.getBoundingClientRect();
       const largeEnough = Math.max(rect.width, rect.height) >= CONFIG.detection.minSize;
       const hasContentClass = CONFIG.detection.includeClasses.some(cls => classes.includes(cls));
-      return largeEnough || hasContentClass;
-    }
+    return largeEnough || hasContentClass;
+  }
 
     findImageFromEvent(e) {
       return e?.target?.closest?.('img');
@@ -178,23 +256,22 @@
       this.hoverContainer.className = 'tmiv-hover-container';
       this.hoverContainer.style.display = 'none';
 
-      // Create download button
-      const dlBtn = this.createButton('Download image', 'Download', `
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-      <polyline points="7 10 12 15 17 10"/>
-      <line x1="12" y1="15" x2="12" y2="3"/>
-    </svg>
-      `);
+            // Create download button
+      this.dlBtn = this.createButton('Download image', 'Download', this.getDownloadIcon());
+      this.downloadResetTimer = null;
 
       // Create copy button
       this.copyBtn = this.createButton('Copy image', 'Copy', this.getCopyIcon());
       this.copyResetTimer = null;
 
-      dlBtn.onclick = (e) => {
+      this.dlBtn.onclick = async (e) => {
         e.preventDefault(); e.stopPropagation();
         if (this.state.hoveredImage) {
-          Utils.downloadImage(Utils.toAbsURL(this.state.hoveredImage.currentSrc || this.state.hoveredImage.src));
+          const success = await Utils.downloadImage(Utils.toAbsURL(this.state.hoveredImage.currentSrc || this.state.hoveredImage.src));
+          if (success) {
+            this.dlBtn.innerHTML = this.getDownloadCheckIcon();
+            this.scheduleDownloadReset(1500);
+          }
         }
       };
 
@@ -215,7 +292,7 @@
         }
       };
 
-      this.hoverContainer.append(dlBtn, this.copyBtn);
+      this.hoverContainer.append(this.dlBtn, this.copyBtn);
       document.body.appendChild(this.hoverContainer);
       this.injectStyles();
     }
@@ -237,9 +314,23 @@
       </svg>`;
     }
 
-    getCheckIcon() {
+        getCheckIcon() {
       return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      <polyline points="20 6 9 17 4 12"></polyline>
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>`;
+    }
+
+    getDownloadIcon() {
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>`;
+    }
+
+    getDownloadCheckIcon() {
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
       </svg>`;
     }
 
@@ -248,11 +339,17 @@
       this.copyResetTimer = setTimeout(() => this.copyBtn.innerHTML = this.getCopyIcon(), delay);
     }
 
+    scheduleDownloadReset(delay = 1200) {
+      clearTimeout(this.downloadResetTimer);
+      this.downloadResetTimer = setTimeout(() => this.dlBtn.innerHTML = this.getDownloadIcon(), delay);
+    }
+
     showHoverUI(img) {
       if (this.isAttachmentPreview(img)) return this.hideHoverUI();
       
       this.state.hoveredImage = img;
       this.copyBtn.innerHTML = this.getCopyIcon();
+      this.dlBtn.innerHTML = this.getDownloadIcon();
       this.positionHoverUI(img);
       this.hoverContainer.style.display = 'flex';
       img.style.cursor = 'pointer';
@@ -263,6 +360,7 @@
       this.state.hoveredImage = null;
       this.hoverContainer.style.display = 'none';
       clearTimeout(this.copyResetTimer);
+      clearTimeout(this.downloadResetTimer);
       this.detachScrollListeners();
     }
 
@@ -281,27 +379,27 @@
       const width = img.naturalWidth || Math.max(1600, Math.round((img.width || 800) * devicePixelRatio));
       const height = img.naturalHeight || Math.max(1200, Math.round((img.height || 600) * devicePixelRatio));
       
-      const pswp = new PhotoSwipe({
+    const pswp = new PhotoSwipe({
         dataSource: [{ src, width, height, element: img }],
         wheelToZoom: true, zoom: true, padding: 8, showHideAnimationType: 'zoom', bgOpacity: 0.9, preloadFirstSlide: false
       });
 
       // Add download button to PhotoSwipe
-      pswp.on('uiRegister', () => {
-        pswp.ui.registerElement({
+    pswp.on('uiRegister', () => {
+      pswp.ui.registerElement({
           name: 'tmDownload', ariaLabel: 'Download image', order: 15, isButton: true, appendTo: 'bar',
-          className: 'pswp__button pswp__button--tm-download',
+        className: 'pswp__button pswp__button--tm-download',
           html: `<svg aria-hidden="true" class="pswp__icn" viewBox="0 0 32 32" width="32" height="32">
             <path d="M16 6v14 M10 14l6 6 6-6 M6 24v4h20v-4" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" stroke-width="2.2"></path>
           </svg>`,
-          onClick: () => { if (pswp.currSlide?.data?.src) Utils.downloadImage(pswp.currSlide.data.src); }
+          onClick: () => { if (pswp.currSlide?.data?.src) Utils.downloadImage(pswp.currSlide.data.src).catch(console.error); }
         });
         this.injectPhotoSwipeStyles();
       });
 
-      pswp.on('close', () => pswp.destroy());
-      pswp.init();
-    }
+    pswp.on('close', () => pswp.destroy());
+    pswp.init();
+  }
 
     // Scroll handling to keep buttons positioned correctly
     attachScrollListeners() {
