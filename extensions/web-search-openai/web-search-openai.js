@@ -16,6 +16,31 @@
     const OAI_URL = 'https://api.openai.com/v1/responses';
 
     // ==============================
+    // Selectors & Constants
+    // ==============================
+    const SELECTORS = {
+      MODELS_CONTAINER: '[data-element-id="models-tab-content"]',
+      GLOBAL_FIELDSET: 'fieldset.space-y-4',
+      HEADER: 'div.antialiased.font-semibold',
+      TAB_BUTTONS: 'ul[role="tablist"] button',
+      SETTINGS_BLOCK: '[data-1stop-websearch-settings]',
+      CONTEXT_SELECT: '[data-element-id="1stop-websearch-context-select"]',
+      TIMEZONE_SELECT: '[data-element-id="1stop-websearch-timezone-select"]'
+    };
+    const GLOBAL_CONTENT_PROBES = [
+      SELECTORS.GLOBAL_FIELDSET,
+      '[data-element-id="new-system-instruction"]',
+      '[data-element-id="context-limit-select"]',
+      '[data-element-id="promt-caching-select"]'
+    ];
+    const MUTATION_RELEVANCE = [
+      SELECTORS.MODELS_CONTAINER,
+      SELECTORS.GLOBAL_FIELDSET,
+      SELECTORS.HEADER,
+      'ul[role="tablist"]'
+    ].join(', ');
+
+    // ==============================
     // Model Detection
     // ==============================
     // Helper that recognizes GPT‑5 family models by name (case-insensitive).
@@ -166,11 +191,28 @@
     // Inserts a compact settings block under “Reasoning effort” so users can
     // enable/disable web search, choose context size, and set their timezone.
     function findModelsTabContent() {
-      return document.querySelector('[data-element-id="models-tab-content"]');
+      return document.querySelector(SELECTORS.MODELS_CONTAINER);
+    }
+    function isGlobalSettingsActive(container) {
+      if (!container) return false;
+      // Primary: tab button state
+      const tabButtons = Array.from(container.querySelectorAll(SELECTORS.TAB_BUTTONS));
+      for (const btn of tabButtons) {
+        const label = (btn.textContent || '').trim().toLowerCase();
+        if (/global settings/.test(label)) {
+          const cls = btn.className || '';
+          if (btn.getAttribute('aria-selected') === 'true') return true;
+          if (/border-blue-600/.test(cls)) return true; // selected border
+          return false;
+        }
+      }
+      // Fallback: detect Global settings content present in DOM
+      if (GLOBAL_CONTENT_PROBES.some(sel => container.querySelector(sel))) return true;
+      return false;
     }
     function findReasoningSection(container) {
       if (!container) return null;
-      const headers = Array.from(container.querySelectorAll('div.antialiased.font-semibold'));
+      const headers = Array.from(container.querySelectorAll(SELECTORS.HEADER));
       for (const header of headers) {
         const text = (header.textContent || '').toLowerCase();
         if (/reasoning\s*effort/.test(text) || /reasoning models only/.test(text)) {
@@ -183,7 +225,7 @@
     // Attempts to find the main fieldset that wraps Global settings sections so we inherit layout/typography
     function findGlobalSettingsFieldset(container) {
       if (!container) return null;
-      const fs = container.querySelector('fieldset.space-y-4');
+      const fs = container.querySelector(SELECTORS.GLOBAL_FIELDSET);
       if (fs) return fs;
       // Fallback: a common wrapper that holds settings content
       const alt = container.querySelector('.flex.flex-col.gap-4');
@@ -193,9 +235,18 @@
     function ensureWebSearchSettingsSection() {
       const container = findModelsTabContent();
       if (!container) return null;
-      const existing = container.querySelector('[data-1stop-websearch-settings]');
-      const reasonSec = findReasoningSection(container);
+      const existing = container.querySelector(SELECTORS.SETTINGS_BLOCK);
+      const active = isGlobalSettingsActive(container);
+      const reasonSec = active ? findReasoningSection(container) : null;
       let wrap = existing;
+
+      // If Global settings tab is not active, remove inserted block (if any) and exit
+      if (!active) {
+        if (existing && existing.parentNode) {
+          try { existing.parentNode.removeChild(existing); } catch {}
+        }
+        return null;
+      }
 
       if (!wrap) {
         wrap = document.createElement('div');
@@ -226,7 +277,7 @@
         // Context-size selector (Off/Low/Medium/High)
         const select = document.createElement('select');
         select.setAttribute('data-element-id', '1stop-websearch-context-select');
-        select.className = 'block w-full rounded-lg border-0 py-2 pl-3 pr-10 text-slate-900 dark:text-white dark:bg-zinc-800 ring-1 ring-inset ring-slate-200 dark:ring-white/20 dark:focus:ring-blue-500 focus:ring-2 focus:ring-blue-600 text-sm sm:text-sm sm:leading-6';
+        select.className = 'block w-full rounded-lg border-0 py-2 pl-3 pr-10 text-slate-900 dark:text-white dark:bg-zinc-800 ring-1 ring-inset ring-slate-200 dark:ring-white/20 dark:focus:ring-blue-500 focus:ring-2 focus:ring-blue-600 text-sm sm:leading-6';
         select.innerHTML = [
           '<option value="off">Off</option>',
           '<option value="low">Low</option>',
@@ -250,7 +301,7 @@
         // Timezone dropdown populated from API (with caching)
         const tzSelect = document.createElement('select');
         tzSelect.setAttribute('data-element-id', '1stop-websearch-timezone-select');
-        tzSelect.className = 'block w-full rounded-lg border-0 py-2 pl-3 pr-10 text-slate-900 dark:text-white dark:bg-zinc-800 ring-1 ring-inset ring-slate-200 dark:ring-white/20 dark:focus:ring-blue-500 focus:ring-2 focus:ring-blue-600 text-sm sm:text-sm sm:leading-6';
+        tzSelect.className = 'block w-full rounded-lg border-0 py-2 pl-3 pr-10 text-slate-900 dark:text-white dark:bg-zinc-800 ring-1 ring-inset ring-slate-200 dark:ring-white/20 dark:focus:ring-blue-500 focus:ring-2 focus:ring-blue-600 text-sm sm:leading-6';
         tzSelect.innerHTML = '<option disabled selected>Loading timezones…</option>';
         wrap.appendChild(tzSelect);
 
@@ -291,10 +342,19 @@
           anchorParent.insertBefore(wrap, reasonSec.nextSibling);
         }
       } else {
+        // Only append when the Global settings content wrapper exists
         const fieldset = findGlobalSettingsFieldset(container);
-        const targetParent = fieldset || container;
-        if (wrap.parentNode !== targetParent) {
-          targetParent.appendChild(wrap);
+        if (fieldset) {
+          const targetParent = fieldset;
+          if (wrap.parentNode !== targetParent) {
+            targetParent.appendChild(wrap);
+          }
+        } else {
+          // No valid parent yet; ensure it's not visible under Model list
+          if (wrap.parentNode) {
+            try { wrap.parentNode.removeChild(wrap); } catch {}
+          }
+          return null;
         }
       }
       return wrap;
@@ -382,8 +442,7 @@
           const nodes = [...m.addedNodes, ...m.removedNodes];
           for (const n of nodes) {
             if (n && n.nodeType === 1) {
-              const relevant = n.matches?.('[data-element-id="models-tab-content"], [data-1stop-websearch-settings], fieldset.space-y-4, div.antialiased.font-semibold') ||
-                               n.querySelector?.('[data-element-id="models-tab-content"], [data-1stop-websearch-settings], fieldset.space-y-4, div.antialiased.font-semibold');
+              const relevant = n.matches?.(MUTATION_RELEVANCE) || n.querySelector?.(MUTATION_RELEVANCE);
               if (relevant) { scheduleEnsure(); break; }
             }
           }
