@@ -170,117 +170,132 @@
     }
     function findReasoningSection(container) {
       if (!container) return null;
-      const sections = Array.from(container.querySelectorAll('div'));
-      for (const sec of sections) {
-        const header = sec.querySelector('.antialiased.font-semibold');
-        const select = sec.querySelector('select');
-        if (!header || !select) continue;
-        const text = header.textContent || '';
-        const hasEffortLabel = /Reasoning effort/i.test(text);
-        const hasEffortOptions = Array.from(select.options || [])
-          .some(o => /^(none|minimal|low|medium|high)$/i.test((o.value || '').toLowerCase()));
-        if (hasEffortLabel || hasEffortOptions) return sec;
+      const headers = Array.from(container.querySelectorAll('div.antialiased.font-semibold'));
+      for (const header of headers) {
+        const text = (header.textContent || '').toLowerCase();
+        if (/reasoning\s*effort/.test(text) || /reasoning models only/.test(text)) {
+          return header.parentElement || null;
+        }
       }
       return null;
+    }
+
+    // Attempts to find the main fieldset that wraps Global settings sections so we inherit layout/typography
+    function findGlobalSettingsFieldset(container) {
+      if (!container) return null;
+      const fs = container.querySelector('fieldset.space-y-4');
+      if (fs) return fs;
+      // Fallback: a common wrapper that holds settings content
+      const alt = container.querySelector('.flex.flex-col.gap-4');
+      return alt || container;
     }
     // Creates the settings block once and wires up change handlers.
     function ensureWebSearchSettingsSection() {
       const container = findModelsTabContent();
-      const reasonSec = findReasoningSection(container);
-      if (!reasonSec || !container) return null;
+      if (!container) return null;
       const existing = container.querySelector('[data-1stop-websearch-settings]');
-      if (existing) return existing; // already inserted
-      
-      const wrap = document.createElement('div');
-      wrap.setAttribute('data-1stop-websearch-settings', '1');
-      
-      // Header: title + reset button
-      const header = document.createElement('div');
-      header.className = 'antialiased font-semibold flex items-center gap-x-2 sm:flex-nowrap flex-wrap';
-      const title = document.createElement('span');
-      title.textContent = 'Web search (GPT-5 only)';
-      const reset = document.createElement('button');
-      reset.type = 'button';
-      reset.className = 'text-blue-600 hover:underline dark:text-blue-500 font-semibold text-xs';
-      reset.textContent = '(Reset to default)';
-      header.appendChild(title);
-      header.appendChild(reset);
-      wrap.appendChild(header);
-      
-      // Friendly description of the available context sizes
-      const desc = document.createElement('div');
-      desc.className = 'text-xs text-slate-600 dark:text-slate-400 my-1';
-      desc.innerHTML = 'Enable OpenAI web search and choose context size.<br/>'
-        + 'high: Most comprehensive context, slower response.<br/>'
-        + 'medium (default): Balanced context and latency.<br/>'
-        + 'low: Least context, fastest response, but potentially lower answer quality.';
-      wrap.appendChild(desc);
-      
-      // Context-size selector (Off/Low/Medium/High)
-      const select = document.createElement('select');
-      select.setAttribute('data-element-id', '1stop-websearch-context-select');
-      select.className = 'block w-full rounded-lg border-0 py-2 pl-3 pr-10 text-slate-900 dark:text-white dark:bg-zinc-800 ring-1 ring-inset ring-slate-200 dark:ring-white/20 dark:focus:ring-blue-500 focus:ring-2 focus:ring-blue-600 sm:text-sm sm:leading-6';
-      select.innerHTML = [
-        '<option value="off">Off</option>',
-        '<option value="low">Low</option>',
-        '<option value="medium">Medium (default)</option>',
-        '<option value="high">High</option>'
-      ].join('');
-      select.value = getWebSearchPref();
-      select.addEventListener('change', () => setWebSearchPref(select.value));
-      reset.addEventListener('click', () => {
-        setWebSearchPref('medium');
-        select.value = 'medium';
-      });
-      wrap.appendChild(select);
-      
-      // Timezone label
-      const tzHeader = document.createElement('div');
-      tzHeader.className = 'antialiased font-semibold flex items-center gap-x-2 sm:flex-nowrap flex-wrap mt-3';
-      tzHeader.appendChild(document.createTextNode('Timezone (IANA)'));
-      wrap.appendChild(tzHeader);
-      
-      // Timezone dropdown populated from API (with caching)
-      const tzSelect = document.createElement('select');
-      tzSelect.setAttribute('data-element-id', '1stop-websearch-timezone-select');
-      tzSelect.className = 'block w-full rounded-lg border-0 py-2 pl-3 pr-10 text-slate-900 dark:text-white dark:bg-zinc-800 ring-1 ring-inset ring-slate-200 dark:ring-white/20 dark:focus:ring-blue-500 focus:ring-2 focus:ring-blue-600 sm:text-sm sm:leading-6';
-      tzSelect.innerHTML = '<option disabled selected>Loading timezones…</option>';
-      wrap.appendChild(tzSelect);
-      
-      (async () => {
-        const list = await fetchAvailableTimezones();
-        const current = getTimeZonePref();
-        tzSelect.innerHTML = '';
-        const makeOption = (tz) => {
-          const opt = document.createElement('option');
-          opt.value = tz;
-          opt.textContent = tz;
-          return opt;
-        };
-        // Put current first
-        tzSelect.appendChild(makeOption(current));
-        if (Array.isArray(list) && list.length) {
-          for (const tz of list) {
-            if (tz && tz !== current) tzSelect.appendChild(makeOption(tz));
+      const reasonSec = findReasoningSection(container);
+      let wrap = existing;
+
+      if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.setAttribute('data-1stop-websearch-settings', '1');
+
+        // Header: title + reset button
+        const header = document.createElement('div');
+        header.className = 'antialiased font-semibold flex items-center gap-x-2 sm:flex-nowrap flex-wrap';
+        const title = document.createElement('span');
+        title.textContent = 'Web search (GPT-5 only)';
+        const reset = document.createElement('button');
+        reset.type = 'button';
+        reset.className = 'text-blue-600 hover:underline dark:text-blue-500 font-semibold text-xs';
+        reset.textContent = '(Reset to default)';
+        header.appendChild(title);
+        header.appendChild(reset);
+        wrap.appendChild(header);
+
+        // Friendly description of the available context sizes
+        const desc = document.createElement('div');
+        desc.className = 'text-xs text-slate-600 dark:text-slate-400 my-1';
+        desc.innerHTML = 'Enable OpenAI web search and choose context size.<br/>'
+          + 'high: Most comprehensive context, slower response.<br/>'
+          + 'medium (default): Balanced context and latency.<br/>'
+          + 'low: Least context, fastest response, but potentially lower answer quality.';
+        wrap.appendChild(desc);
+
+        // Context-size selector (Off/Low/Medium/High)
+        const select = document.createElement('select');
+        select.setAttribute('data-element-id', '1stop-websearch-context-select');
+        select.className = 'block w-full rounded-lg border-0 py-2 pl-3 pr-10 text-slate-900 dark:text-white dark:bg-zinc-800 ring-1 ring-inset ring-slate-200 dark:ring-white/20 dark:focus:ring-blue-500 focus:ring-2 focus:ring-blue-600 text-sm sm:text-sm sm:leading-6';
+        select.innerHTML = [
+          '<option value="off">Off</option>',
+          '<option value="low">Low</option>',
+          '<option value="medium">Medium (default)</option>',
+          '<option value="high">High</option>'
+        ].join('');
+        select.value = getWebSearchPref();
+        select.addEventListener('change', () => setWebSearchPref(select.value));
+        header.querySelector('button')?.addEventListener('click', () => {
+          setWebSearchPref('medium');
+          select.value = 'medium';
+        });
+        wrap.appendChild(select);
+
+        // Timezone label
+        const tzHeader = document.createElement('div');
+        tzHeader.className = 'antialiased font-semibold flex items-center gap-x-2 sm:flex-nowrap flex-wrap mt-3';
+        tzHeader.appendChild(document.createTextNode('Timezone (IANA)'));
+        wrap.appendChild(tzHeader);
+
+        // Timezone dropdown populated from API (with caching)
+        const tzSelect = document.createElement('select');
+        tzSelect.setAttribute('data-element-id', '1stop-websearch-timezone-select');
+        tzSelect.className = 'block w-full rounded-lg border-0 py-2 pl-3 pr-10 text-slate-900 dark:text-white dark:bg-zinc-800 ring-1 ring-inset ring-slate-200 dark:ring-white/20 dark:focus:ring-blue-500 focus:ring-2 focus:ring-blue-600 text-sm sm:text-sm sm:leading-6';
+        tzSelect.innerHTML = '<option disabled selected>Loading timezones…</option>';
+        wrap.appendChild(tzSelect);
+
+        (async () => {
+          const list = await fetchAvailableTimezones();
+          const current = getTimeZonePref();
+          tzSelect.innerHTML = '';
+          const makeOption = (tz) => {
+            const opt = document.createElement('option');
+            opt.value = tz;
+            opt.textContent = tz;
+            return opt;
+          };
+          // Put current first
+          tzSelect.appendChild(makeOption(current));
+          if (Array.isArray(list) && list.length) {
+            for (const tz of list) {
+              if (tz && tz !== current) tzSelect.appendChild(makeOption(tz));
+            }
           }
+          tzSelect.value = current;
+        })().catch(() => {
+          tzSelect.innerHTML = '';
+          const opt = document.createElement('option');
+          const current = getTimeZonePref();
+          opt.value = current;
+          opt.textContent = current;
+          tzSelect.appendChild(opt);
+          tzSelect.value = current;
+        });
+        tzSelect.addEventListener('change', () => setTimeZonePref(tzSelect.value));
+      }
+
+      // Place or move the block immediately after the Reasoning effort section if present
+      if (reasonSec && reasonSec.parentNode) {
+        const anchorParent = reasonSec.parentNode;
+        if (reasonSec.nextSibling !== wrap) {
+          anchorParent.insertBefore(wrap, reasonSec.nextSibling);
         }
-        tzSelect.value = current;
-      })().catch(() => {
-        tzSelect.innerHTML = '';
-        const opt = document.createElement('option');
-        const current = getTimeZonePref();
-        opt.value = current;
-        opt.textContent = current;
-        tzSelect.appendChild(opt);
-        tzSelect.value = current;
-      });
-      tzSelect.addEventListener('change', () => setTimeZonePref(tzSelect.value));
-      
-      // Insert after the Reasoning effort section
-      if (reasonSec.nextSibling) {
-        reasonSec.parentNode.insertBefore(wrap, reasonSec.nextSibling);
       } else {
-        reasonSec.parentNode.appendChild(wrap);
+        const fieldset = findGlobalSettingsFieldset(container);
+        const targetParent = fieldset || container;
+        if (wrap.parentNode !== targetParent) {
+          targetParent.appendChild(wrap);
+        }
       }
       return wrap;
     }
@@ -367,8 +382,8 @@
           const nodes = [...m.addedNodes, ...m.removedNodes];
           for (const n of nodes) {
             if (n && n.nodeType === 1) {
-              const relevant = n.matches?.('[data-element-id="models-tab-content"], [data-1stop-websearch-settings]') ||
-                               n.querySelector?.('[data-element-id="models-tab-content"], [data-1stop-websearch-settings]');
+              const relevant = n.matches?.('[data-element-id="models-tab-content"], [data-1stop-websearch-settings], fieldset.space-y-4, div.antialiased.font-semibold') ||
+                               n.querySelector?.('[data-element-id="models-tab-content"], [data-1stop-websearch-settings], fieldset.space-y-4, div.antialiased.font-semibold');
               if (relevant) { scheduleEnsure(); break; }
             }
           }
