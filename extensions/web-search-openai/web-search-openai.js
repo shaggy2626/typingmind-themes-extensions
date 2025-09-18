@@ -1,6 +1,6 @@
 /* ============================================================================
  * TypingMind – Web Search Tool Injection (2025-08-15)
- * Injects OpenAI web_search_preview tool
+ * Injects OpenAI web_search tool
  * for GPT‑5 models based on reasoning effort and user settings.
  * ========================================================================== */
 
@@ -80,6 +80,8 @@
       return pref === 'low' || pref === 'medium' || pref === 'high' ? pref : 'medium';
     }
 
+    
+
     // ==============================
     // Timezone Helpers
     // ==============================
@@ -120,7 +122,7 @@
     // ==============================
     // Payload Builder
     // ==============================
-    // Purpose: keep the web_search_preview tool in sync with user settings and
+    // Purpose: keep the web_search tool in sync with user settings and
     // OpenAI constraints. Adds or removes the tool per request as needed.
     function ensureWebTool(payload) {
       if (!payload || !isGpt5(payload.model)) return { payload, modified: false };
@@ -138,11 +140,11 @@
       const desiredSize = getDesiredContextSizeFromPref(pref);
       const tz = getTimeZonePref();
       
-      // Locate an existing web_search_preview tool, including wrapped or named variants
+      // Locate an existing web_search tool, including wrapped or named variants
       const webSearchIndex = payload.tools.findIndex(t => t && (
-        t.type === 'web_search_preview' ||
-        t.name === 'web_search_preview' ||
-        (t.tool && (t.tool.type === 'web_search_preview' || t.tool.name === 'web_search_preview'))
+        t.type === 'web_search' ||
+        t.name === 'web_search' ||
+        (t.tool && (t.tool.type === 'web_search' || t.tool.name === 'web_search'))
       ));
       const hasWebSearch = webSearchIndex >= 0;
       
@@ -150,7 +152,7 @@
       const shouldInclude = enabledByUser && isValidEffort;
       
       // If it shouldn't be present, remove it
-      // Note: We only remove the web_search_preview entry and leave the
+      // Note: We only remove the web_search entry and leave the
       // rest of payload.tools untouched. We never clear or recreate the array.
       if (!shouldInclude && hasWebSearch) {
         payload.tools.splice(webSearchIndex, 1);
@@ -163,7 +165,8 @@
           const before = JSON.stringify(payload.tools[webSearchIndex]);
           const existing = payload.tools[webSearchIndex];
           const target = (existing && existing.tool && typeof existing.tool === 'object') ? existing.tool : existing;
-          if (target.type !== 'web_search_preview') target.type = 'web_search_preview';
+          // Normalize legacy preview type to GA type
+          if (target.type !== 'web_search') target.type = 'web_search';
           if (!target.user_location || target.user_location.type !== 'approximate' || target.user_location.timezone !== tz) {
             target.user_location = { type: 'approximate', timezone: tz };
           }
@@ -174,7 +177,7 @@
           if (before !== after) return { payload, modified: true };
         } else {
           payload.tools.push({
-            type: 'web_search_preview',
+            type: 'web_search',
             user_location: { type: 'approximate', timezone: tz },
             search_context_size: desiredSize
           });
@@ -371,9 +374,9 @@
     async function wrappedFetch(input, init) {
         const url = input instanceof Request ? input.url : String(input);
         const method = (init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
-  
-      // Only intercept Responses API POSTs; everything else passes through
-      if (!url.startsWith(OAI_URL) || method !== 'POST') {
+
+      const isOAI = url.startsWith(OAI_URL);
+      if (!isOAI || method !== 'POST') {
         return origFetch.apply(this, arguments);
       }
 
@@ -386,14 +389,20 @@
   
             try {
               const payload = JSON.parse(text);
-        const { payload: updatedPayload, modified } = ensureWebTool(payload);
+        let modified = false;
+        let updatedPayload = payload;
+
+        const result = ensureWebTool(payload);
+        updatedPayload = result.payload;
+        modified = result.modified;
+
         if (!modified) return origFetch.apply(this, arguments);
 
         const newBody = JSON.stringify(updatedPayload);
                 const newHeaders = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
                 newHeaders.set('content-type', 'application/json');
                 newHeaders.delete('content-length');
-  
+
         return origFetch(url, {
                   ...init,
                   method,
