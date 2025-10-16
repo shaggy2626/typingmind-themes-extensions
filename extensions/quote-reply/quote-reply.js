@@ -71,9 +71,18 @@
         // Displays the quote popover above the selected text.
         showPopover(e) {
             const selection = window.getSelection();
-            const responseBlock = e.target.closest(this.SELECTORS.responseBlock);
 
-            if (!selection || selection.isCollapsed || !responseBlock) {
+            if (!selection || selection.isCollapsed) {
+                return;
+            }
+
+            // Check if the selected text is within a response block
+            const range = selection.getRangeAt(0);
+            const container = range.commonAncestorContainer;
+            const element = container.nodeType === Node.TEXT_NODE ? container.parentElement : container;
+            const responseBlock = element.closest(this.SELECTORS.responseBlock);
+
+            if (!responseBlock) {
                 return;
             }
             
