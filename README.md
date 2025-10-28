@@ -15,6 +15,8 @@ A collection of custom extensions and themes designed to enhance your workflow a
   - [Auto Toggle Thinking](#3-auto-toggle-thinking)
   - [Rearrange Plugins](#4-rearrange-plugins)
   - [Web Search (OpenAI)](#5-web-search-openai)
+  - [Image Viewer](#6-image-viewer)
+  - [Markdown Input Renderer](#7-markdown-input-renderer)
 
 ---
 
@@ -175,3 +177,23 @@ This extension upgrades the default image viewing experience by adding a powerfu
 - **Hover Download Button:** A quick-access download button appears when you hover over any image.
 - **Gallery Download Button:** A download icon in the gallery's top toolbar adapts its color to the image background, just like the "Close" button.
 - **Custom Filenames:** Automatically saves images with a clean, timestamped name (e.g., `img123-08-15-24-10-30.png`).
+
+---
+
+### 7. Markdown Input Renderer
+
+**File:** [`extensions/markdown-input-renderer/markdown-input-renderer.js`](./extensions/markdown-input-renderer/markdown-input-renderer.js)
+
+**Extension URL:**
+```
+https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions@latest/extensions/markdown-input-renderer/markdown-input-renderer.js
+```
+
+Upgrade your chat input box with a powerful markdown editor that shows live previews as you type. Built with the [TOAST UI Editor](https://ui.toast.com/tui-editor), this extension replaces TypingMind's standard text box with a feature-rich editor that lets you see exactly how your formatted text will look before sending.
+
+**Features:**
+- **Live Markdown Preview:** Watch your markdown render in real-time as you type.
+- **Three View Modes:** Switch between Markdown, WYSIWYG, and Split (side-by-side) views.
+- **Rich Toolbar:** Quick access to headings, bold, italic, lists, tables, code blocks, and more.
+- **Drag to Resize:** Adjust the editor height with the corner resize handle.
+- **Persistent Preferences:** Remembers your last selected view mode between sessions.
