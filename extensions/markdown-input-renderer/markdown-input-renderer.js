@@ -33,13 +33,7 @@
             TAB_STYLING: 300,
             KEYBOARD_SETUP: 500,
             SEND_CLICK: 150,
-            CLEAR_AFTER_SEND: 200,
-            AUTOCOMPLETE_WAIT: 100
-        },
-        
-        // Autocomplete detection thresholds
-        AUTOCOMPLETE: {
-            CONTENT_LENGTH_THRESHOLD: 10
+            CLEAR_AFTER_SEND: 200
         },
         
         // DOM selectors
@@ -312,12 +306,23 @@
     // ==============================
     // Keyboard Event Handlers
     // ==============================
-    function createKeydownHandler(autocompleteTracker) {
+    function createKeydownHandler() {
         return (event) => {
-            // Track autocomplete state before Enter is processed
-            if (event.key === 'Enter') {
-                autocompleteTracker.lastContentLength = state.editor.getMarkdown().length;
-                autocompleteTracker.menuWasOpen = isAutocompleteMenuOpen();
+            // Handle Enter key for sending
+            if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
+                // Check if autocomplete menu is open
+                const menuIsOpen = isAutocompleteMenuOpen();
+                
+                if (menuIsOpen) {
+                    // Let the menu handle the Enter key
+                    return;
+                }
+                
+                // No menu - prevent default and send message
+                event.preventDefault();
+                event.stopPropagation();
+                sendMessage();
+                return;
             }
             
             // Prevent browser quick-find for "/" (which would steal focus)
@@ -328,31 +333,9 @@
         };
     }
 
-    function createKeyupHandler(autocompleteTracker) {
-        return (event) => {
-            if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
-                setTimeout(() => {
-                    if (shouldSkipSend(autocompleteTracker)) {
-                        autocompleteTracker.menuWasOpen = false;
-                        return;
-                    }
-                    
-                    sendMessage();
-                }, CONFIG.DELAYS.AUTOCOMPLETE_WAIT);
-            }
-        };
-    }
-
     function isAutocompleteMenuOpen() {
         return !!(document.querySelector('[role="combobox"][aria-expanded="true"]') || 
                   document.querySelector('[role="listbox"]'));
-    }
-
-    function shouldSkipSend(autocompleteTracker) {
-        const currentLength = state.editor.getMarkdown().length;
-        const contentJustInserted = currentLength > autocompleteTracker.lastContentLength + CONFIG.AUTOCOMPLETE.CONTENT_LENGTH_THRESHOLD;
-        
-        return autocompleteTracker.menuWasOpen || contentJustInserted;
     }
 
     function sendMessage() {
@@ -391,15 +374,8 @@
             if (!editableArea) return;
             
             editableArea.setAttribute('spellcheck', 'true');
-            
-            // Track autocomplete state across keydown/keyup events
-            const autocompleteTracker = {
-                lastContentLength: 0,
-                menuWasOpen: false
-            };
-            
-            editableArea.addEventListener('keydown', createKeydownHandler(autocompleteTracker), false);
-            editableArea.addEventListener('keyup', createKeyupHandler(autocompleteTracker));
+            // Use capture phase (true) to intercept BEFORE the editor processes the key
+            editableArea.addEventListener('keydown', createKeydownHandler(), true);
             editableArea.addEventListener('input', syncToReactTextarea);
         }, CONFIG.DELAYS.KEYBOARD_SETUP);
     }
