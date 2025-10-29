@@ -18,8 +18,7 @@
     },
     detection: {
       minSize: 96,
-      includeClasses: ['rounded-md', 'max-w-', 'max-h-'],
-      excludeClasses: ['user-avatar', 'emoji', 'icon', 'logo', 'w-4', 'h-4', 'w-5', 'h-5']
+      excludeClasses: ['user-avatar', 'emoji', 'icon', 'logo', 'w-4', 'h-4', 'w-5', 'h-5', 'w-8', 'h-8']
     },
     photoswipe: {
       cssUrl: 'https://cdn.jsdelivr.net/npm/photoswipe@5.4.4/dist/photoswipe.css',
@@ -48,47 +47,21 @@
     return `img${rnd}-${mm}-${dd}-${yy}-${HH}-${MM}${ext}`;
     },
 
-        async downloadImage(srcUrl) {
+        async downloadImage(srcUrl, imgElement = null) {
       try {
-        // For authenticated URLs or CORS-protected images, fetch first
-        const response = await fetch(srcUrl);
-        if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
+        // Due to S3 CORS restrictions, we cannot fetch/download programmatically
+        // Use window.open to ensure it opens in a new tab
+        const img = imgElement || document.querySelector(`img[src="${srcUrl}"], img[currentSrc="${srcUrl}"]`);
+        const finalSrc = img ? (img.getAttribute('src') || img.src) : srcUrl;
         
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
+        // Use window.open to force new tab (more reliable than <a> tag)
+        window.open(finalSrc, '_blank', 'noopener,noreferrer');
         
-    const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = Utils.generateFilename(Utils.getFileExt(srcUrl));
-    a.rel = 'noopener';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-        
-        // Clean up the blob URL after a short delay
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
         return true;
         
       } catch (error) {
-        console.error('[TM Image Viewer] Download failed, trying direct method:', error);
-        
-        // Fallback: try direct download (for non-authenticated URLs)
-        try {
-          const a = document.createElement('a');
-          a.href = srcUrl;
-          a.download = Utils.generateFilename(Utils.getFileExt(srcUrl));
-          a.rel = 'noopener';
-          a.target = '_blank'; // Open in new tab if download fails
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          return true;
-        } catch (fallbackError) {
-          console.error('[TM Image Viewer] Direct download also failed:', fallbackError);
-          // Last resort: open image in new tab
-          window.open(srcUrl, '_blank');
-          return false; // Indicate that actual download failed
-        }
+        console.error('[TM Image Viewer] Download failed:', error);
+        return false;
       }
     },
 
@@ -177,7 +150,7 @@
 
       this.photoSwipePromise = (async () => {
         // Preconnect for faster loading
-        ['preconnect', 'dns-prefetch'].forEach((rel, i) => {
+        ['preconnect', 'dns-prefetch'].forEach((rel) => {
           const id = `tmiv-${rel}`;
           if (!document.getElementById(id)) {
             const link = document.createElement('link');
@@ -209,8 +182,6 @@
     constructor() {
       this.state = {
         hoveredImage: null,
-        lastMousePos: { x: 0, y: 0 },
-        cursorMarked: new WeakSet(),
         resizeObserver: null,
         scrollRaf: 0,
         preloadStarted: false
@@ -219,6 +190,9 @@
       // Bind scroll handler once for performance
       this.boundScrollCheck = this.scheduleScrollCheck.bind(this);
 
+      // Create single ResizeObserver to reuse
+      this.createResizeObserver();
+
       this.createHoverUI();
       this.attachEventListeners();
       this.initPreload();
@@ -226,21 +200,27 @@
 
     // Image detection methods
     isViewableImage(el) {
-    if (!el || el.tagName !== 'IMG') return false;
-    const inMessage = !!el.closest('[data-element-id="ai-response"], [data-element-id="user-message"], .dynamic-chat-content-container');
+      if (!el || el.tagName !== 'IMG') return false;
+      
+      // Check if image is in a chat message
+      const inMessage = !!el.closest('[data-element-id="ai-response"], [data-element-id="user-message"], .dynamic-chat-content-container');
       const isAttachment = !!el.closest(CONFIG.selectors.attachment);
-    if (!inMessage && !isAttachment) return false;
+      if (!inMessage && !isAttachment) return false;
+      
+      // Exclude avatars and other UI images
       if (el.closest(CONFIG.selectors.excludeParents)) return false;
       
       const classes = el.className || '';
       if (CONFIG.detection.excludeClasses.some(cls => classes.includes(cls))) return false;
-    if (isAttachment) return true;
       
-    const rect = el.getBoundingClientRect();
-      const largeEnough = Math.max(rect.width, rect.height) >= CONFIG.detection.minSize;
-      const hasContentClass = CONFIG.detection.includeClasses.some(cls => classes.includes(cls));
-    return largeEnough || hasContentClass;
-  }
+      // Attachments are always viewable
+      if (isAttachment) return true;
+      
+      // For message images, just check if they're large enough
+      // (Don't rely on CSS classes since AI images may not have them)
+      const rect = el.getBoundingClientRect();
+      return Math.max(rect.width, rect.height) >= CONFIG.detection.minSize;
+    }
 
     findImageFromEvent(e) {
       return e?.target?.closest?.('img');
@@ -248,6 +228,20 @@
 
     isAttachmentPreview(el) {
       return !!el?.closest(CONFIG.selectors.attachment);
+    }
+
+    // Create reusable ResizeObserver
+    createResizeObserver() {
+      if (!window.ResizeObserver) return;
+      try {
+        this.state.resizeObserver = new ResizeObserver(() => {
+          if (this.state.hoveredImage) {
+            this.positionHoverUI(this.state.hoveredImage);
+          }
+        });
+      } catch (e) {
+        console.warn('[TM Image Viewer] ResizeObserver not available');
+      }
     }
 
     // Hover UI creation and management
@@ -267,7 +261,10 @@
       this.dlBtn.onclick = async (e) => {
         e.preventDefault(); e.stopPropagation();
         if (this.state.hoveredImage) {
-          const success = await Utils.downloadImage(Utils.toAbsURL(this.state.hoveredImage.currentSrc || this.state.hoveredImage.src));
+          const success = await Utils.downloadImage(
+            Utils.toAbsURL(this.state.hoveredImage.currentSrc || this.state.hoveredImage.src),
+            this.state.hoveredImage
+          );
           if (success) {
             this.dlBtn.innerHTML = this.getDownloadCheckIcon();
             this.scheduleDownloadReset(1500);
@@ -294,6 +291,15 @@
 
       this.hoverContainer.append(this.dlBtn, this.copyBtn);
       document.body.appendChild(this.hoverContainer);
+      
+      // Handle leaving the hover container
+      this.hoverContainer.addEventListener('pointerleave', (e) => {
+        const target = e.relatedTarget;
+        if (this.state.hoveredImage && !this.state.hoveredImage.contains(target)) {
+          this.hideHoverUI();
+        }
+      });
+      
       this.injectStyles();
     }
 
@@ -354,6 +360,16 @@
       this.hoverContainer.style.display = 'flex';
       img.style.cursor = 'pointer';
       this.attachScrollListeners();
+      
+      // Add one-time listener for when we leave this specific image
+      const handleImageLeave = (e) => {
+        const target = e.relatedTarget;
+        if (!this.hoverContainer.contains(target)) {
+          this.hideHoverUI();
+        }
+        img.removeEventListener('pointerleave', handleImageLeave);
+      };
+      img.addEventListener('pointerleave', handleImageLeave);
     }
 
     hideHoverUI() {
@@ -392,7 +408,11 @@
           html: `<svg aria-hidden="true" class="pswp__icn" viewBox="0 0 32 32" width="32" height="32">
             <path d="M16 6v14 M10 14l6 6 6-6 M6 24v4h20v-4" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor" stroke-width="2.2"></path>
           </svg>`,
-          onClick: () => { if (pswp.currSlide?.data?.src) Utils.downloadImage(pswp.currSlide.data.src).catch(console.error); }
+          onClick: () => { 
+            if (pswp.currSlide?.data?.src) {
+              Utils.downloadImage(pswp.currSlide.data.src, pswp.currSlide.data.element).catch(console.error);
+            }
+          }
         });
         this.injectPhotoSwipeStyles();
       });
@@ -424,32 +444,20 @@
       
       const rect = this.state.hoveredImage.getBoundingClientRect();
       
-      // Quick check: if image is completely out of viewport, hide immediately
+      // If image is out of viewport, hide buttons
       if (rect.bottom < 0 || rect.top > window.innerHeight) {
         this.hideHoverUI();
         return;
       }
       
-      const mouseInBounds = this.isPointInRect(this.state.lastMousePos, rect, 10);
-      
-      if (mouseInBounds) {
-        this.positionHoverUI(this.state.hoveredImage);
-        } else {
-        this.hideHoverUI();
-      }
-    }
-
-    isPointInRect(point, rect, padding = 5) {
-      return point && rect &&
-        point.x >= rect.left - padding && point.x <= rect.right + padding &&
-        point.y >= rect.top - padding && point.y <= rect.bottom + padding;
+      // Reposition buttons to follow the image
+      this.positionHoverUI(this.state.hoveredImage);
     }
 
     // Event handling - single delegation for performance
     attachEventListeners() {
-  const root = document.body;
+      const root = document.body;
       root.addEventListener('pointerover', this.handleEvent.bind(this), true);
-      root.addEventListener('pointermove', this.handleEvent.bind(this), { passive: true });
       root.addEventListener('click', this.handleEvent.bind(this), true);
       window.addEventListener('resize', () => { if (this.state.hoveredImage) this.positionHoverUI(this.state.hoveredImage); });
       document.addEventListener('visibilitychange', () => { if (document.hidden) this.hideHoverUI(); });
@@ -457,21 +465,11 @@
 
     handleEvent(e) {
       const img = this.findImageFromEvent(e);
-      this.state.lastMousePos = { x: e.clientX, y: e.clientY };
 
       if (e.type === 'pointerover' && img && this.isViewableImage(img)) {
         this.startPreload();
         this.showHoverUI(img);
         this.observeResize(img);
-      } else if (e.type === 'pointermove') {
-        if (img && this.isViewableImage(img)) {
-          if (this.isAttachmentPreview(img) && !this.state.cursorMarked.has(img)) {
-            img.style.cursor = 'pointer';
-            this.state.cursorMarked.add(img);
-          }
-        } else if (this.state.hoveredImage && !this.state.hoveredImage.contains(e.target) && !this.hoverContainer.contains(e.target)) {
-          this.hideHoverUI();
-        }
       } else if (e.type === 'click' && img && this.isViewableImage(img) && !this.hoverContainer.contains(e.target) && !e.ctrlKey && !e.metaKey) {
         e.preventDefault(); e.stopPropagation();
         this.openViewer(img);
@@ -479,15 +477,15 @@
     }
 
     observeResize(img) {
+      if (!this.state.resizeObserver) return;
       try {
-        if (!window.ResizeObserver) return;
-        if (this.state.resizeObserver) this.state.resizeObserver.disconnect();
-        this.state.resizeObserver = new ResizeObserver(() => {
-          if (this.state.hoveredImage === img) this.positionHoverUI(img);
-        });
+        // Disconnect previous observations and observe new image
+        this.state.resizeObserver.disconnect();
         this.state.resizeObserver.observe(img);
-    } catch {}
-  }
+      } catch (e) {
+        // Silently fail if ResizeObserver has issues
+      }
+    }
 
     startPreload() {
       if (this.state.preloadStarted) return;
