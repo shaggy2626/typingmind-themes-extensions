@@ -308,6 +308,14 @@
     // ==============================
     function createKeydownHandler() {
         return (event) => {
+            // Handle Ctrl+Y for redo (Toast UI default is Ctrl+Shift+Z)
+            if (event.key === 'y' && event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey) {
+                event.preventDefault();
+                event.stopPropagation();
+                state.editor.exec('redo');
+                return;
+            }
+            
             // Handle Enter key for sending
             if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
                 // Check if autocomplete menu is open
