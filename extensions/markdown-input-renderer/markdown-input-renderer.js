@@ -111,6 +111,31 @@
     }
 
     // ==============================
+    // Image Upload Handling
+    // ==============================
+    function handleImageBlob(blob, callback) {
+        // Forward the image blob to the hidden textarea so TypingMind can handle it
+        const file = new File([blob], blob.name || 'image.png', { type: blob.type });
+        
+        // Create a new ClipboardEvent with the image
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        
+        // Dispatch paste event to the hidden textarea (where TypingMind listens)
+        const pasteEvent = new ClipboardEvent('paste', {
+            clipboardData: dataTransfer,
+            bubbles: true,
+            cancelable: true
+        });
+        
+        state.textarea.dispatchEvent(pasteEvent);
+        
+        // DON'T call the callback - this prevents Toast UI from inserting anything
+        // If we call callback('', ''), it still inserts ![image.png]()
+        return false;
+    }
+
+    // ==============================
     // Editor Instance Creation
     // ==============================
     function createEditorInstance(initialValue = '') {
@@ -121,7 +146,10 @@
             initialValue,
             initialEditType: state.editType,
             previewStyle: state.previewStyle,
-            toolbarItems: CONFIG.TOOLBAR
+            toolbarItems: CONFIG.TOOLBAR,
+            hooks: {
+                addImageBlobHook: handleImageBlob
+            }
         });
     }
 
