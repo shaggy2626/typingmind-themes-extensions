@@ -333,6 +333,42 @@
         };
     }
 
+    function createPasteHandler() {
+        return () => {
+            // Wait for paste content to be inserted, then force height adjustment
+            requestAnimationFrame(() => {
+                // Force sync to update content
+                syncToReactTextarea();
+                
+                // Multiple approaches to force editor to recalculate height
+                const mdContainer = state.container.querySelector(CONFIG.SELECTORS.MD_CONTAINER);
+                const wwContainer = state.container.querySelector('.toastui-editor-ww-container');
+                const editorMain = state.container.querySelector('.toastui-editor-main-container');
+                
+                // Reset height to auto to allow expansion
+                [mdContainer, wwContainer, editorMain].forEach(el => {
+                    if (el) {
+                        el.style.height = 'auto';
+                    }
+                });
+                
+                // Force reflow
+                if (mdContainer) mdContainer.offsetHeight;
+                if (wwContainer) wwContainer.offsetHeight;
+                
+                // Additional check after a brief delay to handle async content insertion
+                setTimeout(() => {
+                    [mdContainer, wwContainer].forEach(el => {
+                        if (el) {
+                            el.style.height = 'auto';
+                            el.scrollTop = el.scrollHeight; // Scroll to bottom to show pasted content
+                        }
+                    });
+                }, 50);
+            });
+        };
+    }
+
     function isAutocompleteMenuOpen() {
         return !!(document.querySelector('[role="combobox"][aria-expanded="true"]') || 
                   document.querySelector('[role="listbox"]'));
@@ -376,6 +412,7 @@
             editableArea.setAttribute('spellcheck', 'true');
             // Use capture phase (true) to intercept BEFORE the editor processes the key
             editableArea.addEventListener('keydown', createKeydownHandler(), true);
+            editableArea.addEventListener('paste', createPasteHandler());
             editableArea.addEventListener('input', syncToReactTextarea);
         }, CONFIG.DELAYS.KEYBOARD_SETUP);
     }
