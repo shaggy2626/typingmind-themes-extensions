@@ -184,6 +184,7 @@
                 max-height: ${CONFIG.HEIGHT.MAX} !important;
                 overflow-y: auto !important;
                 resize: vertical !important;
+                z-index: 0 !important;
             }
 
             #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-contents {
@@ -199,6 +200,12 @@
                 text-align: left !important;
                 padding-left: 10px !important;
                 padding-right: 0 !important;
+            }
+            
+            #${CONFIG.SELECTORS.EDITOR_CONTAINER},
+            #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-defaultUI,
+            #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-main-container {
+                z-index: 0 !important;
             }
         `;
         document.head.appendChild(styleSheet);
