@@ -72,7 +72,9 @@
 
     // Reads and normalizes the reasoning effort from the outgoing request payload.
     function getReasoningEffort(payload) {
-      return (payload?.reasoning?.effort || '').toLowerCase();
+      const effort = (payload?.reasoning?.effort || '').toLowerCase().trim();
+      // Normalize empty or missing effort to empty string
+      return effort || '';
     }
 
     // Normalizes the UI choice to a value OpenAI accepts ('low'|'medium'|'high').
@@ -140,6 +142,12 @@
       const desiredSize = getDesiredContextSizeFromPref(pref);
       const tz = getTimeZonePref();
       
+      // Explicitly reject 'minimal' and 'none' reasoning efforts
+      // OpenAI does not support web_search with these efforts
+      if (reasoningEffort === 'minimal' || reasoningEffort === 'none' || reasoningEffort === '') {
+        console.log(`[Web Search] Skipping web_search - reasoning effort '${reasoningEffort}' not supported`);
+      }
+      
       // Locate an existing web_search tool, including wrapped or named variants
       const webSearchIndex = payload.tools.findIndex(t => t && (
         t.type === 'web_search' ||
@@ -149,12 +157,28 @@
       const hasWebSearch = webSearchIndex >= 0;
       
       // Determine whether the request should include the tool at all
+      // Web search is ONLY allowed when ALL of these are true:
+      // 1. User has it enabled (pref !== 'off')
+      // 2. Reasoning effort is one of: 'low', 'medium', 'high'
       const shouldInclude = enabledByUser && isValidEffort;
       
-      // If it shouldn't be present, remove it
+      if (enabledByUser && !isValidEffort) {
+        console.log(`[Web Search] User enabled web search (${pref}) but reasoning effort '${reasoningEffort}' is not valid. Tool will not be added.`);
+      }
+      
+      // SAFETY: Always remove web_search if reasoning effort is invalid,
+      // regardless of user settings. This prevents 400 errors from OpenAI.
+      if (!isValidEffort && hasWebSearch) {
+        console.log(`[Web Search] Removing web_search tool due to invalid reasoning effort: '${reasoningEffort}'`);
+        payload.tools.splice(webSearchIndex, 1);
+        return { payload, modified: true };
+      }
+      
+      // If it shouldn't be present (user disabled or invalid effort), remove it
       // Note: We only remove the web_search entry and leave the
       // rest of payload.tools untouched. We never clear or recreate the array.
       if (!shouldInclude && hasWebSearch) {
+        console.log(`[Web Search] Removing web_search tool (user setting: ${pref}, effort: ${reasoningEffort})`);
         payload.tools.splice(webSearchIndex, 1);
         return { payload, modified: true };
       }
