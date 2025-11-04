@@ -70,10 +70,24 @@
       try { localStorage.setItem(PREF_KEY, value); } catch {}
     }
 
-    // Reads and normalizes the reasoning effort from the outgoing request payload.
+    // Reads and normalizes the reasoning effort from the request payload.
+    // IMPORTANT: Also checks localStorage for the reasoning-effort-toolbar extension's selection
+    // because that extension runs AFTER this one in the fetch wrapper chain.
     function getReasoningEffort(payload) {
+      // First check if reasoning-effort-toolbar is setting the effort
+      try {
+        const toolbarSelection = localStorage.getItem('tmx-reason-selected');
+        if (toolbarSelection) {
+          const normalized = toolbarSelection.toLowerCase().trim();
+          if (normalized) {
+            console.log(`[Web Search] Using reasoning effort from toolbar: '${normalized}'`);
+            return normalized;
+          }
+        }
+      } catch {}
+      
+      // Fall back to payload value
       const effort = (payload?.reasoning?.effort || '').toLowerCase().trim();
-      // Normalize empty or missing effort to empty string
       return effort || '';
     }
 
