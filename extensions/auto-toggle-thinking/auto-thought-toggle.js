@@ -6,6 +6,10 @@
 (() => {
     'use strict';
 
+    // Prevent double-install across SPA navigations or duplicate script loads
+    if (window.__tmxAutoThoughtInstalled) return;
+    window.__tmxAutoThoughtInstalled = true;
+
     /* ---------- class ------------------------------------------------------ */
     class AutoThoughtToggle {
       /* static config */
@@ -24,6 +28,8 @@
       constructor() {
         /* read persisted state as real boolean, defaulting to true */
         this.enabled = JSON.parse(localStorage.getItem(this.STORAGE) ?? 'true');
+        /* track per-details observers for cleanup */
+        this._detailsObservers = new WeakMap();
         this.#init();
       }
   
@@ -31,21 +37,41 @@
       #init() {
         console.log(`[AutoThoughtToggle] ${this.enabled ? 'Enabled' : 'Disabled'}.`);
   
-        /* DOM observer with light throttling */
-        this._pending = false;
-        this.observer = new MutationObserver(() => {
-          if (this._pending) return;
-          this._pending = true;
-          setTimeout(() => {
-            this._pending = false;
-            this.#autoToggle();
-            if (!document.getElementById(this.BTN_ID)) this.#injectButton();
-          }, 100); // 100ms debounce to reduce frequent scans
-        });
-        this.observer.observe(document.body, {childList:true,subtree:true});
+        /* rAF-batched DOM observer scoped to chat container when available */
+        this._rafScheduled = false;
+        this._observer = null;
+        this._clickDelegated = false;
+        this._processedAutoExpand = new WeakSet();
+        this.#ensureObserver();
   
         /* cleanup to avoid duplicate observers on navigation */
-        window.addEventListener('beforeunload', () => this.observer.disconnect());
+        window.addEventListener('beforeunload', () => this._observer?.disconnect());
+
+        /* re-arm observer on SPA route changes */
+        window.addEventListener('hashchange', () => this.#ensureObserver());
+        window.addEventListener('popstate',   () => this.#ensureObserver());
+
+        /* single delegated click to respect user interaction */
+        if (!this._clickDelegated) {
+          document.addEventListener('click', (e) => {
+            const summary = e.target?.closest?.(`${this.SEL.thought}>summary`);
+            if (!summary) return;
+            const d = summary.closest(this.SEL.thought);
+            if (!d) return;
+            
+            // Mark as user-controlled
+            d.dataset.userInteracted = '1';
+            d.removeAttribute('data-auto-expanded');
+            
+            // Immediately disconnect and clean up any dedicated observer
+            const obs = this._detailsObservers.get(d);
+            if (obs) {
+              obs.disconnect();
+              this._detailsObservers.delete(d);
+            }
+          }, { capture: true });
+          this._clickDelegated = true;
+        }
   
         /* console helpers */
         window.autoThoughtToggle = {
@@ -55,6 +81,40 @@
         };
       }
   
+      /** attach observer to the most relevant container */
+      #ensureObserver() {
+        try { this._observer?.disconnect(); } catch {}
+        const container = this.#findChatContainer() || document.body;
+        this._observer = new MutationObserver((muts) => {
+          if (document.hidden) return; // skip background tabs
+          // quick relevance check to avoid unnecessary scans
+          const relevant = muts.some(m => (
+            [...(m.addedNodes||[]), ...(m.removedNodes||[])].some(n => {
+              if (!(n && n.nodeType === 1)) return false;
+              const el = /** @type {Element} */(n);
+              return el.matches?.(this.SEL.thought) ||
+                     el.querySelector?.(this.SEL.thought) ||
+                     el.matches?.(this.SEL.menu) ||
+                     el.querySelector?.(this.SEL.menu);
+            })
+          ));
+          if (!relevant) return;
+          if (this._rafScheduled) return;
+          this._rafScheduled = true;
+          requestAnimationFrame(() => {
+            this._rafScheduled = false;
+            this.#autoToggle();
+            if (!document.getElementById(this.BTN_ID)) this.#injectButton();
+          });
+        });
+        this._observer.observe(container, { childList: true, subtree: true });
+      }
+
+      #findChatContainer() {
+        const anyResponse = document.querySelector('[data-element-id="ai-response"]');
+        return anyResponse?.parentElement?.closest?.('[data-element-id]') || anyResponse?.parentElement || null;
+      }
+
       /** change feature state & UI */
       #setState(on) {
         this.enabled = on;
@@ -67,45 +127,65 @@
       #autoToggle() {
         if (!this.enabled) return;
   
-        /* collapse blocks whose answer started */
+        /* collapse blocks whose answer started (fallback for any that slipped through) */
         document.querySelectorAll('details[data-auto-expanded]').forEach(d => {
           const next = d.nextElementSibling;
           if (next && next.matches(this.SEL.content)) {
             d.open = false;
             d.removeAttribute('data-auto-expanded');
+            // Clean up observer if it exists
+            const obs = this._detailsObservers.get(d);
+            if (obs) {
+              obs.disconnect();
+              this._detailsObservers.delete(d);
+            }
           }
         });
   
         /* manage new "Thinking…" blocks */
         document.querySelectorAll(this.SEL.thought).forEach(d => {
           if (d.dataset.autoExpanded || d.dataset.userInteracted) return;
+          if (this._processedAutoExpand.has(d)) return;
   
           const label = d.querySelector('summary')?.textContent || '';
           if (!/Thinking|Thought/i.test(label)) return;
   
           d.open = true;
           d.dataset.autoExpanded = '1';
+          this._processedAutoExpand.add(d);
   
           /* collapse immediately if answer already there */
           const next = d.nextElementSibling;
           if (next && next.matches(this.SEL.content)) {
             d.open = false;
             d.removeAttribute('data-auto-expanded');
+            return; // Don't create observer if already collapsed
           }
-        });
-  
-        /* track manual clicks to stop auto‑handling */
-        document.querySelectorAll(`${this.SEL.thought}>summary:not([data-clicked])`)
-          .forEach(s => {
-            s.addEventListener('click', () => {
-              const d = s.closest(this.SEL.thought);
-              if (d) {
-                d.dataset.userInteracted = '1';
-                d.removeAttribute('data-auto-expanded');
-              }
-            }, {capture:true});
-            s.dataset.clicked = '1';
+          
+          /* create dedicated observer to watch for when content appears */
+          if (!d.parentElement) return;
+          
+          const collapseObserver = new MutationObserver(() => {
+            // Check if content appeared as next sibling
+            const contentSibling = d.nextElementSibling;
+            if (contentSibling && contentSibling.matches(this.SEL.content)) {
+              // Content appeared - collapse and clean up
+              d.open = false;
+              d.removeAttribute('data-auto-expanded');
+              collapseObserver.disconnect();
+              this._detailsObservers.delete(d);
+            }
           });
+          
+          // Watch parent for new children (minimal scope)
+          collapseObserver.observe(d.parentElement, { 
+            childList: true,  // Only watch for siblings being added
+            subtree: false    // Don't watch deep children
+          });
+          
+          // Store for cleanup
+          this._detailsObservers.set(d, collapseObserver);
+        });
       }
   
       /** add toggle entry to "More actions" menu */
