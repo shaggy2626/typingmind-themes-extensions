@@ -44,6 +44,7 @@
     // Model Detection
     // ==============================
     // Helper that recognizes GPT‑5 family models by name (case-insensitive).
+    // Matches: gpt-5, gpt-5.1, gpt5, gpt5.1, etc.
     const isGpt5 = modelName => !!modelName && String(modelName).toLowerCase().includes('gpt-5');
 
     // ==============================
@@ -73,12 +74,23 @@
     // Reads and normalizes the reasoning effort from the request payload.
     // IMPORTANT: Also checks localStorage for the reasoning-effort-toolbar extension's selection
     // because that extension runs AFTER this one in the fetch wrapper chain.
+    // NOTE: For GPT-5.1, the toolbar maps "Minimal" UI selection to "none" API value.
     function getReasoningEffort(payload) {
       // First check if reasoning-effort-toolbar is setting the effort
       try {
         const toolbarSelection = localStorage.getItem('tmx-reason-selected');
         if (toolbarSelection) {
-          const normalized = toolbarSelection.toLowerCase().trim();
+          let normalized = toolbarSelection.toLowerCase().trim();
+          
+          // If toolbar shows "minimal" but model is GPT-5.1, it will actually send "none"
+          // We need to check the model to know the real effort value
+          if (normalized === 'minimal' && payload?.model) {
+            const modelName = String(payload.model).toLowerCase().replace(/[^a-z0-9.]/g, '');
+            if (modelName.includes('gpt5.1') || modelName.includes('gpt51')) {
+              normalized = 'none';
+            }
+          }
+          
           if (normalized) {
             console.log(`[Web Search] Using reasoning effort from toolbar: '${normalized}'`);
             return normalized;
