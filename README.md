@@ -17,6 +17,7 @@ A collection of custom extensions and themes designed to enhance your workflow a
   - [Web Search (OpenAI)](#5-web-search-openai)
   - [Image Viewer](#6-image-viewer)
   - [Markdown Input Renderer](#7-markdown-input-renderer)
+  - [Context Token Badge](#8-context-token-badge)
 
 ---
 
@@ -197,3 +198,23 @@ Upgrade your chat input box with a powerful markdown editor that shows live prev
 - **Rich Toolbar:** Quick access to headings, bold, italic, lists, tables, code blocks, and more.
 - **Drag to Resize:** Adjust the editor height with the corner resize handle.
 - **Persistent Preferences:** Remembers your last selected view mode between sessions.
+
+---
+
+### 8. Context Token Badge
+
+**File:** [`extensions/context-token-badge/context-token-badge.js`](./extensions/context-token-badge/context-token-badge.js)
+
+**Extension URL:**
+```
+https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions@latest/extensions/context-token-badge/context-token-badge.js
+```
+
+Keep track of your conversation's context length without clicking into the Chat Info panel. This extension displays the current token count directly under the "About this chat" button, updating automatically as you send messages and receive responses.
+
+**Features:**
+- **Always Visible:** Shows the context length right under the "About this chat" button.
+- **Smart Formatting:** Rounds numbers for easy reading (e.g., 14,062 → "14k", 580 → "580").
+- **Zero Polling:** Updates only when something actually changes (new message, chat switch, or tab focus).
+- **Hover Tooltip:** Shows the exact token count when you hover over the badge.
+- **Lightweight:** Reads directly from TypingMind's stored data without opening dialogs or making extra network calls.
