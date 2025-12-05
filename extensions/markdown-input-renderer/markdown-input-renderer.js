@@ -16,7 +16,11 @@
         CDN: {
             CSS: 'https://uicdn.toast.com/editor/latest/toastui-editor.min.css',
             CSS_DARK: 'https://uicdn.toast.com/editor/latest/theme/toastui-editor-dark.css',
-            JS: 'https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js'
+            JS: 'https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js',
+            // Syntax highlighting plugin
+            PRISM_THEME: 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css',
+            SYNTAX_PLUGIN_CSS: 'https://uicdn.toast.com/editor-plugin-code-syntax-highlight/latest/toastui-editor-plugin-code-syntax-highlight.min.css',
+            SYNTAX_PLUGIN_JS: 'https://uicdn.toast.com/editor-plugin-code-syntax-highlight/latest/toastui-editor-plugin-code-syntax-highlight-all.min.js'
         },
         
         // Height constraints
@@ -99,29 +103,46 @@
     // ==============================
     // Library Loading
     // ==============================
+    function loadCSS(href) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = href;
+        document.head.appendChild(link);
+    }
+
+    function loadScript(src) {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = resolve;
+            script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+            document.head.appendChild(script);
+        });
+    }
+
     function loadEditorLibrary() {
-        if (window.toastui?.Editor) {
+        if (window.toastui?.Editor?.plugin?.codeSyntaxHighlight) {
             return Promise.resolve();
         }
 
-        return new Promise((resolve, reject) => {
-            // Load base CSS
-            const cssLink = document.createElement('link');
-            cssLink.rel = 'stylesheet';
-            cssLink.href = CONFIG.CDN.CSS;
-            document.head.appendChild(cssLink);
+        return new Promise(async (resolve, reject) => {
+            try {
+                // Load all CSS files
+                loadCSS(CONFIG.CDN.CSS);
+                loadCSS(CONFIG.CDN.CSS_DARK);
+                loadCSS(CONFIG.CDN.PRISM_THEME);
+                loadCSS(CONFIG.CDN.SYNTAX_PLUGIN_CSS);
 
-            // Load dark theme CSS (always load it so theme switching works)
-            const darkCssLink = document.createElement('link');
-            darkCssLink.rel = 'stylesheet';
-            darkCssLink.href = CONFIG.CDN.CSS_DARK;
-            document.head.appendChild(darkCssLink);
-
-            const script = document.createElement('script');
-            script.src = CONFIG.CDN.JS;
-            script.onload = resolve;
-            script.onerror = () => reject(new Error('Failed to load TOAST UI Editor'));
-            document.head.appendChild(script);
+                // Load main editor JS first
+                await loadScript(CONFIG.CDN.JS);
+                
+                // Then load syntax highlight plugin
+                await loadScript(CONFIG.CDN.SYNTAX_PLUGIN_JS);
+                
+                resolve();
+            } catch (error) {
+                reject(error);
+            }
         });
     }
 
@@ -154,6 +175,8 @@
     // Editor Instance Creation
     // ==============================
     function createEditorInstance(initialValue = '') {
+        const { codeSyntaxHighlight } = window.toastui.Editor.plugin;
+        
         return new window.toastui.Editor({
             el: state.container,
             height: CONFIG.HEIGHT.MODE,
@@ -163,6 +186,7 @@
             previewStyle: state.previewStyle,
             toolbarItems: CONFIG.TOOLBAR,
             theme: isDarkMode() ? 'dark' : 'light',
+            plugins: [codeSyntaxHighlight],
             hooks: {
                 addImageBlobHook: handleImageBlob
             }
@@ -226,6 +250,80 @@
             #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-main-container {
                 z-index: 0 !important;
             }
+
+            /* ========================================
+               LIGHT MODE: Dark background for fenced code blocks (triple backticks)
+               Does NOT affect inline code (single backticks)
+               ======================================== */
+            
+            /* Markdown/Write mode: Code block - child span styling */
+            html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-md-container .toastui-editor-md-code-block {
+                background-color: transparent !important;
+                color: #f8f8f2 !important;
+            }
+            
+            /* Code block delimiter (the triple backtick marks) */
+            html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-md-container .toastui-editor-md-code-block .toastui-editor-md-delimiter {
+                color: #75715e !important;
+            }
+            
+            /* Code block line background - parent div styling */
+            html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-md-container .toastui-editor-md-code-block-line-background {
+                background-color: #272822 !important;
+            }
+            
+            /* First line: top corners (using .start class) */
+            html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-md-container .toastui-editor-md-code-block-line-background.start {
+                border-top-left-radius: 6px !important;
+                border-top-right-radius: 6px !important;
+            }
+            
+            /* Last line: bottom corners (followed by non-code-block element) */
+            html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-md-container .toastui-editor-md-code-block-line-background:has(+ div:not(.toastui-editor-md-code-block-line-background)) {
+                border-bottom-left-radius: 6px !important;
+                border-bottom-right-radius: 6px !important;
+            }
+            
+            /* Fallback: Last code block line when it's the last child */
+            html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-md-container .toastui-editor-md-code-block-line-background:last-child {
+                border-bottom-left-radius: 6px !important;
+                border-bottom-right-radius: 6px !important;
+            }
+            
+            /* Preview mode: Code blocks with syntax highlighting */
+            html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-contents pre {
+                background-color: #272822 !important;
+                border-radius: 6px !important;
+                padding: 12px !important;
+                margin: 8px 0 !important;
+            }
+            
+            html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-contents pre code {
+                background-color: transparent !important;
+                color: #f8f8f2 !important;
+                padding: 0 !important;
+            }
+            
+            /* WYSIWYG mode: Code blocks */
+            html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-ww-container pre {
+                background-color: #272822 !important;
+                border-radius: 6px !important;
+                padding: 12px !important;
+            }
+            
+            html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-ww-container pre code {
+                background-color: transparent !important;
+                color: #f8f8f2 !important;
+            }
+            
+            /* Prism.js syntax highlighting colors (Okaidia theme adjustments) */
+            html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-contents pre code[class*="language-"],
+            html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-contents pre[class*="language-"] {
+                background-color: #272822 !important;
+                color: #f8f8f2 !important;
+            }
+            
+            /* Inline code (single backticks) - NOT modified, uses TOAST UI default styling */
         `;
         
         // Remove existing styles if any (for theme switching)
