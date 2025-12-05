@@ -45,12 +45,14 @@ These instructions are for standard versions of TypingMind.
 https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions@latest/themes/gpt-style-theme/gpt-style-theme.js
 ```
 
-This theme overhauls the UI to mimic the clean, minimalist aesthetic of the classic ChatGPT interface. It applies a dedicated **light mode** theme that restyles message bubbles, code blocks, and the sidebar for a modern, familiar look.
+This theme overhauls the UI to mimic the clean, minimalist aesthetic of the classic ChatGPT interface. It restyles message bubbles, code blocks, and the sidebar for a modern, familiar look—and automatically adapts to your TypingMind theme setting.
 
 **Features:**
-- **Dedicated Light Theme:** A clean, bright interface for both the chat and sidebar.
-- **Redesigned Message Bubbles:** Restyled for clearer conversation flow.
-- **Enhanced Code Blocks:** Features sticky headers and improved scrolling.
+- **Auto Light/Dark Mode:** Seamlessly follows TypingMind's theme setting—no manual switching required.
+- **ChatGPT-Inspired Colors:** Light mode uses clean whites and grays; dark mode uses ChatGPT's signature dark palette (`#212121` background).
+- **Redesigned Message Bubbles:** Restyled user message bubbles for clearer conversation flow.
+- **Enhanced Code Blocks:** Features sticky headers, proper syntax highlighting backgrounds, and improved scrolling.
+- **Complete Sidebar Styling:** Both light and dark themes apply to the entire sidebar including search, chat items, and menus.
 
 ---
 
