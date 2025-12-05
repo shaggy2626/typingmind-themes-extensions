@@ -256,20 +256,29 @@
                Does NOT affect inline code (single backticks)
                ======================================== */
             
-            /* Markdown/Write mode: Code block - child span styling */
+            /* Markdown/Write mode: Code block - child span styling with white cursor */
             html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-md-container .toastui-editor-md-code-block {
                 background-color: transparent !important;
                 color: #f8f8f2 !important;
+                caret-color: #f8f8f2 !important;
             }
             
-            /* Code block delimiter (the triple backtick marks) */
+            /* Code block delimiter (the triple backtick marks) - brighter green for visibility */
             html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-md-container .toastui-editor-md-code-block .toastui-editor-md-delimiter {
-                color: #75715e !important;
+                color: #89D185 !important;
+                font-weight: 600 !important;
             }
             
-            /* Code block line background - parent div styling */
+            /* Code block line background - parent div with padding and min-height so cursor is always visible */
             html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-md-container .toastui-editor-md-code-block-line-background {
                 background-color: #272822 !important;
+                padding-left: 12px !important;
+                padding-right: 12px !important;
+                padding-top: 2px !important;
+                padding-bottom: 2px !important;
+                min-height: 24px !important;
+                line-height: 1.5 !important;
+                caret-color: #f8f8f2 !important;
             }
             
             /* First line: top corners (using .start class) */
