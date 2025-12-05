@@ -198,6 +198,7 @@ Upgrade your chat input box with a powerful markdown editor that shows live prev
 - **Rich Toolbar:** Quick access to headings, bold, italic, lists, tables, code blocks, and more.
 - **Drag to Resize:** Adjust the editor height with the corner resize handle.
 - **Persistent Preferences:** Remembers your last selected view mode between sessions.
+- **Auto Light/Dark Mode:** Automatically matches TypingMind's theme setting—switches seamlessly when you toggle between light and dark mode.
 
 ---
 

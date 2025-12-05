@@ -15,6 +15,7 @@
         // CDN URLs for TOAST UI Editor
         CDN: {
             CSS: 'https://uicdn.toast.com/editor/latest/toastui-editor.min.css',
+            CSS_DARK: 'https://uicdn.toast.com/editor/latest/theme/toastui-editor-dark.css',
             JS: 'https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js'
         },
         
@@ -89,6 +90,13 @@
     };
 
     // ==============================
+    // Theme Detection
+    // ==============================
+    function isDarkMode() {
+        return document.documentElement.classList.contains('dark');
+    }
+
+    // ==============================
     // Library Loading
     // ==============================
     function loadEditorLibrary() {
@@ -97,10 +105,17 @@
         }
 
         return new Promise((resolve, reject) => {
+            // Load base CSS
             const cssLink = document.createElement('link');
             cssLink.rel = 'stylesheet';
             cssLink.href = CONFIG.CDN.CSS;
             document.head.appendChild(cssLink);
+
+            // Load dark theme CSS (always load it so theme switching works)
+            const darkCssLink = document.createElement('link');
+            darkCssLink.rel = 'stylesheet';
+            darkCssLink.href = CONFIG.CDN.CSS_DARK;
+            document.head.appendChild(darkCssLink);
 
             const script = document.createElement('script');
             script.src = CONFIG.CDN.JS;
@@ -147,6 +162,7 @@
             initialEditType: state.editType,
             previewStyle: state.previewStyle,
             toolbarItems: CONFIG.TOOLBAR,
+            theme: isDarkMode() ? 'dark' : 'light',
             hooks: {
                 addImageBlobHook: handleImageBlob
             }
@@ -172,10 +188,14 @@
         const textareaStyles = window.getComputedStyle(state.textarea);
         
         const styleSheet = document.createElement('style');
+        styleSheet.id = 'toast-editor-custom-styles';
         styleSheet.textContent = `
-            #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-md-container,
-            #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-contents {
-                background: white !important;
+            /* Light mode: white background for editor */
+            html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-md-container,
+            html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-ww-container,
+            html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .toastui-editor-contents,
+            html:not(.dark) #${CONFIG.SELECTORS.EDITOR_CONTAINER} .ProseMirror {
+                background-color: #ffffff !important;
             }
 
             #${CONFIG.SELECTORS.EDITOR_CONTAINER} ${CONFIG.SELECTORS.MD_CONTAINER},
@@ -192,7 +212,6 @@
                 font-size: ${textareaStyles.fontSize} !important;
                 font-weight: ${textareaStyles.fontWeight} !important;
                 line-height: ${textareaStyles.lineHeight} !important;
-                color: ${textareaStyles.color} !important;
                 padding: ${textareaStyles.paddingTop} ${textareaStyles.paddingRight} ${textareaStyles.paddingBottom} ${textareaStyles.paddingLeft} !important;
             }
 
@@ -208,6 +227,11 @@
                 z-index: 0 !important;
             }
         `;
+        
+        // Remove existing styles if any (for theme switching)
+        const existingStyles = document.getElementById('toast-editor-custom-styles');
+        if (existingStyles) existingStyles.remove();
+        
         document.head.appendChild(styleSheet);
     }
 
@@ -535,6 +559,34 @@
     }
 
     // ==============================
+    // Theme Change Handling
+    // ==============================
+    function watchForThemeChanges() {
+        let currentTheme = isDarkMode();
+        
+        const observer = new MutationObserver(() => {
+            const newTheme = isDarkMode();
+            if (newTheme !== currentTheme) {
+                currentTheme = newTheme;
+                
+                // Recreate editor with new theme if it exists
+                if (state.editor && state.container) {
+                    const currentContent = state.editor.getMarkdown();
+                    state.editor.destroy();
+                    state.editor = createEditorInstance(currentContent);
+                    attachEditorHandlers();
+                    setupSplitTab();
+                }
+            }
+        });
+
+        observer.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['class']
+        });
+    }
+
+    // ==============================
     // Initialization
     // ==============================
     async function initialize() {
@@ -562,6 +614,7 @@
             
             if (!state.isInitialized) {
                 watchForChatChanges();
+                watchForThemeChanges();
                 state.isInitialized = true;
             }
         } catch (error) {
