@@ -1,2 +1,16 @@
 .cursor
+.cursorindexingignore
 testing/
+tui.editor-master/
+extensions/prompt-perfect/
+extensions/e2b-drag-drop/
+extensions/study-prompt/
+
+# Playwright test artifacts and screenshots
+.playwright-mcp/
+
+# Generated spec/story files
+.specstory/
+
+# Assets and temporary files
+assets/
