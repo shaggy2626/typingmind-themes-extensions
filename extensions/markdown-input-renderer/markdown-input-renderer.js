@@ -90,7 +90,10 @@
         editor: null,
         container: null,
         previewStyle: localStorage.getItem(CONFIG.STORAGE.PREVIEW_STYLE) || CONFIG.PREVIEW_STYLES.TAB,
-        editType: localStorage.getItem(CONFIG.STORAGE.EDIT_TYPE) || CONFIG.EDIT_TYPES.MARKDOWN
+        editType: localStorage.getItem(CONFIG.STORAGE.EDIT_TYPE) || CONFIG.EDIT_TYPES.MARKDOWN,
+        // Observer references for cleanup
+        chatObserver: null,
+        themeObserver: null
     };
 
     // ==============================
@@ -638,9 +641,14 @@
     // Chat Navigation Handling
     // ==============================
     function watchForChatChanges() {
+        // Disconnect existing observer if present (prevents duplicate observers)
+        if (state.chatObserver) {
+            state.chatObserver.disconnect();
+        }
+        
         let reinitScheduled = false;
         
-        const observer = new MutationObserver(() => {
+        state.chatObserver = new MutationObserver(() => {
             if (reinitScheduled) return;
             
             reinitScheduled = true;
@@ -659,7 +667,7 @@
             });
         });
 
-        observer.observe(document.body, {
+        state.chatObserver.observe(document.body, {
             childList: true,
             subtree: true
         });
@@ -669,9 +677,14 @@
     // Theme Change Handling
     // ==============================
     function watchForThemeChanges() {
+        // Disconnect existing observer if present (prevents duplicate observers)
+        if (state.themeObserver) {
+            state.themeObserver.disconnect();
+        }
+        
         let currentTheme = isDarkMode();
         
-        const observer = new MutationObserver(() => {
+        state.themeObserver = new MutationObserver(() => {
             const newTheme = isDarkMode();
             if (newTheme !== currentTheme) {
                 currentTheme = newTheme;
@@ -687,7 +700,7 @@
             }
         });
 
-        observer.observe(document.documentElement, {
+        state.themeObserver.observe(document.documentElement, {
             attributes: true,
             attributeFilter: ['class']
         });
