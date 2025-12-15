@@ -18,6 +18,7 @@ A collection of custom extensions and themes designed to enhance your workflow a
   - [Image Viewer](#6-image-viewer)
   - [Markdown Input Renderer](#7-markdown-input-renderer)
   - [Context Token Badge](#8-context-token-badge)
+  - [Sidebar Pin](#9-sidebar-pin)
 
 ---
 
@@ -221,3 +222,26 @@ Keep track of your conversation's context length without clicking into the Chat 
 - **Zero Polling:** Updates only when something actually changes (new message, chat switch, or tab focus).
 - **Hover Tooltip:** Shows the exact token count when you hover over the badge.
 - **Lightweight:** Reads directly from TypingMind's stored data without opening dialogs or making extra network calls.
+
+---
+
+### 9. Sidebar Pin
+
+*Based on an original script by @NocturnalKernel.*
+
+**File:** [`extensions/sidebar-pin/sidebar-pin.js`](./extensions/sidebar-pin/sidebar-pin.js)
+
+**Extension URL:**
+```
+https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions@latest/extensions/sidebar-pin/sidebar-pin.js
+```
+
+Keep your sidebar always expanded and stop it from auto-collapsing when you click "New Chat" or navigate between conversations. This lightweight extension instantly re-opens the sidebar whenever TypingMind tries to collapse it, giving you a true "pinned sidebar" experience without any visible animation flicker.
+
+**Features:**
+- **Auto-Expand on Load:** Sidebar opens automatically when you first visit TypingMind.
+- **No Animation Flash:** Uses microtask scheduling to re-expand before the browser can paint the collapse animation.
+- **Pin/Unpin Behavior:** Click "Close sidebar" to unpin and allow manual collapse; click the compact TypingMind logo to re-pin.
+- **Targeted Observer:** Watches only the nav-container's class attribute for minimal overhead.
+- **Fast Response:** 150ms throttle and 30ms re-expand timing ensure instant recovery.
+- **Debug API:** Access `window.sidebarPin.pin()`, `.unpin()`, `.toggle()`, and `.isPinned()` for manual control.
