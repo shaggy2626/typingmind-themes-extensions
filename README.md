@@ -139,7 +139,7 @@ Tired of scrolling to find your favorite tools? This extension adds intuitive dr
 
 ---
 
-### 5. Web Search (OpenAI)
+### 5. Web Search Enhancer (OpenAI)
 
 **File:** [`extensions/web-search-openai/web-search-openai.js`](./extensions/web-search-openai/web-search-openai.js)
 
@@ -148,21 +148,26 @@ Tired of scrolling to find your favorite tools? This extension adds intuitive dr
 https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions@latest/extensions/web-search-openai/web-search-openai.js
 ```
 
-Enable OpenAI's browsing automatically when using GPT‑5 models. This extension only affects GPT‑5 (it does nothing for other models). It injects the `web_search_preview` tool into OpenAI Responses API requests based on your preferences and the selected reasoning effort, without altering your other tools.
+Enhances TypingMind's native Web Browser model tool for OpenAI by adding timezone and search context size parameters. This extension works alongside TypingMind's built-in web search—it only modifies existing `web_search` requests, it does NOT add or enable web search itself.
 
-> Note: This uses OpenAI's official Web Search tool — the same browsing capability available natively in ChatGPT. See the [OpenAI Web Search tool docs (Responses API mode)](https://platform.openai.com/docs/guides/tools-web-search?api-mode=responses).
+> **Prerequisite:** Enable TypingMind's native "Web Browser" model tool in Plugins → Model tools before using this extension.
+
+**How it works:**
+- When TypingMind sends a web search request to OpenAI, this extension enhances it by adding:
+  - `user_location.timezone` — Auto-detected from your browser
+  - `search_context_size` — Your preferred context amount (low/medium/high)
+- If web search is disabled in TypingMind, this extension does nothing.
 
 **Features:**
-- **Web context amount:** Choose how much web context to include; your choice is remembered.
-- **Options:**
-  - **high**: Most comprehensive context, slower response.
-  - **medium (default)**: Balanced context and latency.
-  - **low**: Least context, fastest response, but potentially lower answer quality.
-- **Timezone:** Set your timezone (auto‑detected); pick another if you prefer. The list is fetched from `timeapi.io` and cached for 7 days.
-- **Easy settings:** Find it under Global Settings → Models ("Web search (GPT‑5 only)").
-- **When it turns on:** Applies only if the model is GPT‑5 and reasoning effort is **Low/Medium/High**. OpenAI does not support Web Search when reasoning is **Minimal**, so the tool will not be added (and is removed if present). 
-- **Tool safety:** Only adds/updates/removes the `web_search_preview` tool; all other tools remain untouched. Updates existing entries even if wrapped or named differently to avoid duplicates.
-- **Local storage used:** `1stop-web-search-context` (`off|low|medium|high`) and `1stop-web-search-timezone` (IANA timezone).
+- **Context Size Options:**
+  - **low**: Faster response, less web context
+  - **medium** (default): Balanced speed and context
+  - **high**: More comprehensive context, slower response
+- **Auto Timezone Detection:** Reads your timezone directly from the browser—no external API calls.
+- **Refresh Button:** Manually refresh timezone detection if you travel or change system settings.
+- **Settings Location:** Models → Global Settings → "Web Search Context Size (OpenAI)"
+- **Lightweight:** Simple event listeners (no DOM polling), only intercepts OpenAI requests when web search is present.
+- **Local storage:** `tmx-websearch-context-size` (low|medium|high)
 
 ---
 
