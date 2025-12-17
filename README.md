@@ -19,6 +19,7 @@ A collection of custom extensions and themes designed to enhance your workflow a
   - [Markdown Input Renderer](#7-markdown-input-renderer)
   - [Context Token Badge](#8-context-token-badge)
   - [Sidebar Pin](#9-sidebar-pin)
+  - [Reasoning Effort Toolbar](#10-reasoning-effort-toolbar)
 
 ---
 
@@ -245,3 +246,39 @@ Keep your sidebar always expanded and stop it from auto-collapsing when you clic
 - **Targeted Observer:** Watches only the nav-container's class attribute for minimal overhead.
 - **Fast Response:** 150ms throttle and 30ms re-expand timing ensure instant recovery.
 - **Debug API:** Access `window.sidebarPin.pin()`, `.unpin()`, `.toggle()`, and `.isPinned()` for manual control.
+
+---
+
+### 10. Reasoning Effort Toolbar
+
+**File:** [`extensions/reasoning-effort-toolbar/reasoning-effort-toolbar.js`](./extensions/reasoning-effort-toolbar/reasoning-effort-toolbar.js)
+
+**Extension URL:**
+```
+https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions@latest/extensions/reasoning-effort-toolbar/reasoning-effort-toolbar.js
+```
+
+Quickly adjust reasoning effort levels for GPT-5 models directly from the chat input toolbar. This extension adds a convenient pill button next to the Think toggle, letting you switch between effort levels without opening model settings. The selection persists per model and syncs with TypingMind's native storage.
+
+**Supported Models:**
+- **GPT-5** (gpt-5)
+- **GPT-5.1** (gpt-5.1)
+- **GPT-5.2** (gpt-5.2)
+
+*Note: Does not support GPT-5 Codex variants.*
+
+**Effort Options by Model:**
+| Model | Available Options |
+|-------|-------------------|
+| GPT-5 | Minimal, Low, Medium, High |
+| GPT-5.1 | None, Low, Medium, High |
+| GPT-5.2 | None, Low, Medium, High, Xhigh |
+
+**Features:**
+- **Smart Model Detection:** Only appears when a supported GPT-5 model is selected.
+- **Model-Specific Options:** Dynamically shows the correct effort levels for each model.
+- **Persistent Selection:** Remembers your choice per model across sessions.
+- **Native Storage Sync:** Integrates with TypingMind's model settings for consistency.
+- **Instant Effect:** Changes apply immediately via fetch wrapper—no page refresh needed.
+- **Clean UI:** Matches TypingMind's Think button style with automatic light/dark mode support.
+- **Lightweight:** Event-driven with debounced observers—no polling, minimal CPU usage.

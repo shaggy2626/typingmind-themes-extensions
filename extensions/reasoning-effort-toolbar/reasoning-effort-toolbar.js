@@ -1,571 +1,558 @@
-// TypingMind UI-only: Effort (Reasoning) pill — GPT‑5 only, Think-style, ChatGPT icon
-// Persists selection across sessions; popover closes immediately on selection
-// Event-driven (no polling). Options: Minimal, Low, Medium, High
-// Version: 1.4
+// TypingMind Reasoning Effort Toolbar v2
+// Simplified version - cleaner architecture, single observer, syncs with TM native storage
+// Only shows for: gpt-5, gpt-5.1, gpt-5.2 (no Codex)
+// Model-specific effort options:
+//   gpt-5:   minimal, low, medium, high
+//   gpt-5.1: none, low, medium, high
+//   gpt-5.2: none, low, medium, high, xhigh
+// Version: 2.1
 
 (() => {
-    if (window.__tmxReasonToolbarInstalled) return;
-    window.__tmxReasonToolbarInstalled = true;
-    const IDS = {
-      wrap: 'tmx-reason-wrap',
-      btn: 'tmx-reason-btn',
-      menu: 'tmx-reason-menu',
-      style: 'tmx-reason-style',
-    };
-    const OPTIONS = ['Minimal', 'Low', 'Medium', 'High'];
-    const KEY_SEL = 'tmx-reason-selected';
-  
-    // -------- helpers --------
-    const $ = (s, r = document) => r.querySelector(s);
-    const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
-    const isGPT5Text = (t) => /\bgpt-?\s*5\b/i.test((t || '').trim());
-  
-    function findModelButton() {
-      // Prefer a composer-adjacent button that displays "GPT-*"
-      const actions = $('[data-element-id="chat-input-actions"]');
-      if (actions) {
-        let node = actions.parentElement;
-        for (let i = 0; i < 5 && node; i++) {
-          const match = $$('button', node).find(b =>
-            /gpt-\s*\d/i.test((b.innerText || b.textContent || ''))
-          );
-          if (match) return match;
-          node = node.parentElement;
-        }
-      }
-      // Fallback: any button with GPT-* visible
-      return $$('button').find(b => /gpt-\s*\d/i.test((b.innerText || b.textContent || ''))) || null;
-    }
-  
-    function readCurrentModelLabel() {
-      const btn = findModelButton();
-      if (!btn) return '';
-      const text = (btn.innerText || btn.textContent || '').trim();
-      const aria = (btn.getAttribute('aria-label') || '').trim();
-      const title = (btn.title || '').trim();
-      return [text, aria, title].filter(Boolean).join(' ');
-    }
-  
-    function shouldShowEffort() {
-      const btn = findModelButton();
-      if (!btn) return false; // Strict: hide until we can positively detect GPT-5
-      const label = readCurrentModelLabel().toLowerCase();
-      return /\bgpt-?\s*5\b/.test(label);
-    }
-  
-    // -------- styles (spacing + popover) --------
-    function injectStyles() {
-      if (document.getElementById(IDS.style)) return;
-      const css = `
-        /* Keep a consistent gap from Think so pills never touch */
-        #${IDS.wrap} {
-          display: inline-flex;
-          align-items: center;
-          margin-left: 0.25rem; /* Tailwind ml-1 */
-        }
-  
-        /* Popover (portaled to body; above composer; flips if needed) */
-        #${IDS.menu} {
-          position: fixed;
-          z-index: 2147483000;
-          width: 14rem;
-          padding: 0.25rem;
-          background: #fff;
-          color: rgb(15 23 42);
-          border: 1px solid rgba(0,0,0,.08);
-          border-radius: 0.75rem; /* rounded-xl */
-          box-shadow: 0 10px 30px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.08);
-          transform: translateZ(0);
-        }
-        .dark #${IDS.menu} {
-          background: rgb(15 23 42);
-          color: #fff;
-          border-color: rgba(255,255,255,.12);
-          box-shadow: 0 10px 30px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.30);
-        }
-        .tmx-item {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 0.75rem;
-          border-radius: 0.5rem; /* rounded-lg */
-          padding: 0.55rem 0.65rem;
-          cursor: pointer;
-        }
-        .tmx-item:hover { background: rgba(15,23,42,.06); }
-        .dark .tmx-item:hover { background: rgba(255,255,255,.12); }
-        .tmx-check {
-          width: 1rem;
-          height: 1rem;
-          border: 1.5px solid currentColor;
-          border-radius: 0.25rem;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 0.8rem;
-        }
-        .tmx-item[aria-selected="true"] .tmx-check { background: currentColor; color: inherit; }
-        .tmx-hidden { display: none !important; }
-      `;
-      const style = document.createElement('style');
-      style.id = IDS.style;
-      style.textContent = css;
-      document.head.appendChild(style);
-    }
-  
-    // Think-style pill (active look) with flexible width for long words
-    const reasonPillClasses = [
-      'relative','focus-visible:outline-blue-600','h-9','rounded-lg',
-      'justify-center','items-center','gap-1.5','inline-flex',
-      'min-w-fit','px-3',
-      'disabled:text-neutral-400','dark:disabled:text-neutral-500',
-      'bg-blue-200','dark:bg-blue-800',
-      'text-blue-600','dark:text-blue-200',
-      'hover:bg-blue-300','active:bg-blue-400',
-      'hover:bg-blue-300/80','active:bg-blue-400/80'
-    ].join(' ');
-  
-    // ChatGPT "light thinking" icon
-    const chatgptLightThinkingSVG = `
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" class="w-5 h-5 flex-shrink-0">
-        <path d="M16.585 9.99998C16.585 6.36319 13.6368 3.41502 10 3.41502C6.3632 3.41502 3.41504 6.36319 3.41504 9.99998C3.41504 13.6368 6.3632 16.5849 10 16.5849C13.6368 16.5849 16.585 13.6368 16.585 9.99998ZM17.915 9.99998C17.915 14.3713 14.3713 17.915 10 17.915C5.62867 17.915 2.08496 14.3713 2.08496 9.99998C2.08496 5.62865 5.62867 2.08494 10 2.08494C14.3713 2.08494 17.915 5.62865 17.915 9.99998Z"></path>
-        <path d="M12.0837 0.00494385C12.4509 0.00511975 12.7488 0.302822 12.7488 0.669983C12.7488 1.03714 12.4509 1.33485 12.0837 1.33502H7.91675C7.54948 1.33502 7.25171 1.03725 7.25171 0.669983C7.25171 0.302714 7.54948 0.00494385 7.91675 0.00494385H12.0837Z"></path>
-        <path d="M11.2992 10.75C10.8849 11.4675 9.96756 11.7133 9.25012 11.2991C8.53268 10.8849 8.28687 9.96747 8.70108 9.25003C9.45108 7.95099 12.0671 5.4199 12.5001 5.6699C12.9331 5.9199 12.0492 9.45099 11.2992 10.75Z"></path>
-      </svg>
-    `;
-  
-    function buildMenu(selected, btn, closeMenu) {
-      // Reuse existing menu if present; remove extras if any
-      const existingMenus = document.querySelectorAll('#' + IDS.menu);
-      let menu = existingMenus[0] || null;
-      if (existingMenus.length > 1) {
-        for (let i = 1; i < existingMenus.length; i++) {
-          try { existingMenus[i].remove(); } catch {}
-        }
-      }
-      if (!menu) {
-        menu = document.createElement('div');
-        menu.id = IDS.menu;
-        menu.className = 'tmx-hidden';
-        menu.setAttribute('role', 'menu');
-        menu.setAttribute('aria-label', 'Reasoning effort');
-      } else {
-        // Clear previous items to avoid duplication of entries
-        menu.innerHTML = '';
-      }
-  
-      const mkItem = (opt, on) => {
-        const el = document.createElement('div');
-        el.className = 'tmx-item';
-        el.setAttribute('role', 'menuitemradio');
-        el.setAttribute('data-value', opt);
-        el.setAttribute('aria-selected', String(on));
-        el.innerHTML = `<span>${opt}</span><span class="tmx-check">${on ? '✓' : ''}</span>`;
-        el.addEventListener('pointerdown', (e) => {
-          e.stopPropagation();
-          menu.querySelectorAll('.tmx-item').forEach(i => {
-            const active = i.getAttribute('data-value') === opt;
-            i.setAttribute('aria-selected', String(active));
-            i.querySelector('.tmx-check').textContent = active ? '✓' : '';
-          });
-          btn.querySelector('span.text-xs').textContent = opt;
-          try { localStorage.setItem(KEY_SEL, opt); } catch {}
-          // Guarantee close right after selection
-          requestAnimationFrame(() => closeMenu());
-        });
-        return el;
-      };
-      OPTIONS.forEach(o => menu.appendChild(mkItem(o, o === selected)));
-      return menu;
-    }
-  
-    function positionMenu(menu, btn) {
-      const r = btn.getBoundingClientRect();
-      let top = r.bottom + 8;
-      let left = r.left;
-      const mh = menu.offsetHeight || 240;
-      const mw = menu.offsetWidth || 224;
-      const vw = window.innerWidth, vh = window.innerHeight;
-      left = Math.min(Math.max(8, left), vw - mw - 8);
-      if (top + mh > vh - 8) top = Math.max(8, r.top - 8 - mh);
-      if (r.right + 8 > vw) left = Math.max(8, r.right - mw);
-      Object.assign(menu.style, { top: `${top}px`, left: `${left}px` });
-    }
-  
-    function mountEffort() {
-      injectStyles();
-      if (document.getElementById(IDS.wrap)) return;
-  
-      const thinkBtn = $('[data-element-id="toggle-thinking-button"]');
-      const actions = $('[data-element-id="chat-input-actions"]');
-      if (!thinkBtn && !actions) return;
-  
-      // First-run default persisted (Minimal)
-      let selected = 'Minimal';
-      try {
-        const saved = localStorage.getItem(KEY_SEL);
-        if (!saved) localStorage.setItem(KEY_SEL, selected);
-        else selected = saved;
-      } catch {}
-  
-      const wrap = document.createElement('span');
-      wrap.id = IDS.wrap;
-  
-      const btn = document.createElement('button');
-      btn.id = IDS.btn;
-      btn.type = 'button';
-      btn.className = reasonPillClasses;
-      btn.setAttribute('aria-haspopup', 'menu');
-      btn.setAttribute('aria-expanded', 'false');
-      btn.setAttribute('title', 'Select reasoning effort (UI only)');
-      btn.innerHTML = `${chatgptLightThinkingSVG}<span class="text-xs font-medium">${selected}</span>`;
-  
-      let open = false;
-      let openingGuard = false;
-      let menu; // defined after close/open functions
-  
-      const onOutsidePD = (e) => {
-        if (!open || openingGuard) return;
-        const path = e.composedPath ? e.composedPath() : [];
-        if (path.includes(btn) || path.includes(menu)) return;
-        closeMenu();
-      };
-      function openMenu() {
-        $$('#' + IDS.menu).forEach(m => m !== menu && m.classList.add('tmx-hidden'));
-        if (!menu.isConnected) document.body.appendChild(menu);
-        openingGuard = true;
-        menu.classList.remove('tmx-hidden');
-        btn.setAttribute('aria-expanded', 'true');
-        open = true;
-        requestAnimationFrame(() => {
-          positionMenu(menu, btn);
-          setTimeout(() => { openingGuard = false; }, 0);
-        });
-        window.addEventListener('pointerdown', onOutsidePD, true);
-      }
-      function closeMenu() {
-        if (!open) return;
-        menu.classList.add('tmx-hidden');
-        btn.setAttribute('aria-expanded', 'false');
-        open = false;
-        window.removeEventListener('pointerdown', onOutsidePD, true);
-      }
-  
-      menu = buildMenu(selected, btn, closeMenu);
-  
-      btn.addEventListener('pointerdown', (e) => {
-        e.stopPropagation();
-        open ? closeMenu() : openMenu();
-      });
-      window.addEventListener('resize', () => { if (open) positionMenu(menu, btn); });
-      window.addEventListener('scroll', () => { if (open) positionMenu(menu, btn); }, true);
-  
-      wrap.appendChild(btn);
-      // Insert immediately after Think if present; otherwise prepend into actions left group
-      if (thinkBtn && thinkBtn.parentElement) {
-        thinkBtn.parentElement.insertBefore(wrap, thinkBtn.nextSibling);
-      } else if (actions) {
-        const leftGroup = actions.querySelector('.items-center.justify-start') || actions.firstElementChild || actions;
-        leftGroup.insertBefore(wrap, leftGroup.firstChild);
-      }
-      // Ensure order: Effort pill first, then XML button
-      try {
-        const actionsRoot = actions || document.querySelector('[data-element-id="chat-input-actions"]');
-        const leftGroup = actionsRoot?.querySelector('.items-center.justify-start') || thinkBtn?.parentElement;
-        const xmlBtn = document.querySelector('[data-element-id="insert-code-button"]');
-        if (leftGroup && xmlBtn && xmlBtn.parentElement === leftGroup) {
-          if (wrap.nextSibling !== xmlBtn) {
-            leftGroup.insertBefore(xmlBtn, wrap.nextSibling);
-          }
-        }
-      } catch {}
-      if (!menu.isConnected) document.body.appendChild(menu);
-    }
+  'use strict';
 
-    // Ensure Effort pill and XML button order relative to Think button (re-entrant safe)
-    let __orderingRunning = false;
-    let __orderingScheduled = false;
-    function scheduleEnsureOrder() {
-      if (__orderingScheduled) return;
-      __orderingScheduled = true;
-      requestAnimationFrame(() => {
-        __orderingScheduled = false;
-        ensureOrder();
-      });
-    }
-    function ensureOrder() {
-      if (__orderingRunning) return;
-      __orderingRunning = true;
-      try {
-        const actionsRoot = $('[data-element-id="chat-input-actions"]');
-        if (!actionsRoot) return;
-        const leftGroup = actionsRoot.querySelector('.items-center.justify-start') || actionsRoot.firstElementChild || actionsRoot;
-        const thinkBtn = actionsRoot.querySelector('[data-element-id="toggle-thinking-button"]');
-        const wrap = document.getElementById(IDS.wrap);
-        if (thinkBtn && wrap && leftGroup) {
-          const desiredAfterThink = thinkBtn.nextElementSibling;
-          if (desiredAfterThink !== wrap) {
-            leftGroup.insertBefore(wrap, thinkBtn.nextElementSibling);
-          }
-        }
-        const xmlBtn = actionsRoot.querySelector('[data-element-id="insert-code-button"]');
-        if (wrap && xmlBtn && leftGroup) {
-          const desiredAfterWrap = wrap.nextElementSibling;
-          if (desiredAfterWrap !== xmlBtn) {
-            leftGroup.insertBefore(xmlBtn, wrap.nextElementSibling);
-          }
-        }
-      } catch {}
-      finally { __orderingRunning = false; }
-    }
+  // Prevent duplicate installation
+  if (window.__tmxReasoningEffortV2) return;
+  window.__tmxReasoningEffortV2 = true;
+
+  // ============ CONSTANTS ============
+  const SELECTORS = {
+    composerActions: '[data-element-id="chat-input-actions"]',
+    thinkButton: '[data-element-id="toggle-thinking-button"]',
+    modelButton: 'button', // We'll find the one with GPT text
+  };
+
+  const IDS = {
+    wrapper: 'tmx-effort-v2-wrap',
+    button: 'tmx-effort-v2-btn',
+    menu: 'tmx-effort-v2-menu',
+    styles: 'tmx-effort-v2-styles',
+  };
+
+  // Model-specific effort options
+  const MODEL_EFFORT_OPTIONS = {
+    'gpt-5': ['Minimal', 'Low', 'Medium', 'High'],
+    'gpt-5.1': ['None', 'Low', 'Medium', 'High'],
+    'gpt-5.2': ['None', 'Low', 'Medium', 'High', 'Xhigh'],
+  };
   
-    function unmountEffort() {
-      document.getElementById(IDS.wrap)?.remove();
-      document.getElementById(IDS.menu)?.classList.add('tmx-hidden');
-    }
+  // Supported models (no Codex)
+  const SUPPORTED_MODELS = Object.keys(MODEL_EFFORT_OPTIONS);
   
-    // -------- event-driven visibility (no polling) with tiny scoped observers --------
-    function syncEffortVisibility() {
-      const show = shouldShowEffort();
-      const mounted = !!document.getElementById(IDS.wrap);
-      if (show && !mounted) {
-        mountEffort();
-        return;
-      }
-      if (!show && mounted) {
-        unmountEffort();
-      }
-    }
+  const DEFAULT_EFFORT = 'Medium';
+  const TM_STORAGE_KEY = 'TM_useModelsSettings';
+  const OAI_API_URL = 'https://api.openai.com/v1/responses';
 
-    // Observe the model pill for label changes. Extremely cheap: one node, characterData + subtree.
-    function observeModelLabel(modelBtn) {
-      if (!modelBtn || modelBtn.__tmxLabelObserver) return;
-      const obs = new MutationObserver(() => {
-        // Any label change → re-evaluate once
-        syncEffortVisibility();
-      });
-      obs.observe(modelBtn, { subtree: true, characterData: true, childList: true });
-      modelBtn.__tmxLabelObserver = obs;
-    }
+  // ============ HELPERS ============
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-    // Attach click hook (short-lived timeouts) and label observer
-    function attachModelClickHook() {
-      const modelBtn = findModelButton();
-      if (!modelBtn) return;
-
-      // Install one-time click hook to re-check shortly after selection
-      if (!modelBtn.__tmxHooked) {
-        modelBtn.__tmxHooked = true;
-        modelBtn.addEventListener('pointerdown', () => {
-          const attempt = () => syncEffortVisibility();
-          setTimeout(attempt, 150);
-          setTimeout(attempt, 350);
-        });
-      }
-
-      // Observe label changes for the lifetime of this pill
-      observeModelLabel(modelBtn);
-    }
-
-    // On initial page load or route change, the label might settle a few frames later.
-    // Do a short rAF loop (max ~20 frames ≈ 330ms) to catch hydration once, then stop.
-    function settleThenSync(maxFrames = 40) {
-      let frames = 0;
-      function step() {
-        frames++;
-        attachModelClickHook(); // ensures observer and click hook exist
-        syncEffortVisibility(); // mount/unmount as needed
-        scheduleEnsureOrder(); // keep after Think when components settle
-        // If already visible for GPT‑5 or we’ve tried enough frames, stop
-        if (document.getElementById(IDS.wrap) || frames >= maxFrames) return;
-        requestAnimationFrame(step);
-      }
-      requestAnimationFrame(step);
-    }
-
-    // The composer actions container can be swapped on re-render; re-arm hooks on changes
-    function observeComposerActions() {
-      const actions = $('[data-element-id="chat-input-actions"]');
-      if (!actions || actions.__tmxComposerObserver) return;
-      const obs = new MutationObserver(() => {
-        // Rewire hooks if the model button instance or label changed
-        attachModelClickHook();
-        settleThenSync(10);
-        scheduleEnsureOrder();
-      });
-      obs.observe(actions, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
-      actions.__tmxComposerObserver = obs;
-    }
-
-    // Edit-mode swaps the composer markup (adds an edit banner and toggles classes)
-    function observeEditMode() {
-      if (document.body.__tmxEditObserver) return;
-      const editObs = new MutationObserver((mutations) => {
-        for (const m of mutations) {
-          if (m.type !== 'childList') continue;
-          const nodes = [...m.addedNodes, ...m.removedNodes];
-          for (const n of nodes) {
-            if (n && n.nodeType === 1) {
-              const el = /** @type {Element} */(n);
-              if (el.matches?.('[data-element-id="edit-message-label"]') || el.querySelector?.('[data-element-id="edit-message-label"]')) {
-                // When edit mode appears or disappears, re-sync after layout settles
-                settleThenSync(20);
-                return;
-              }
-            }
-          }
-        }
-      });
-      editObs.observe(document.body, { childList: true, subtree: true });
-      document.body.__tmxEditObserver = editObs;
-    }
-
-    function onRouteChange() {
-      // Give the composer a tick to render, then settle
-      setTimeout(() => {
-        observeComposerActions();
-        observeEditMode();
-        settleThenSync(20);
-      }, 120);
-    }
-    window.addEventListener('hashchange', onRouteChange);
-    window.addEventListener('popstate', onRouteChange);
-
-    // Observe body for composer mount/unmount across SPA navigations
-    if (!document.body.__tmxComposerBodyObs) {
-      const bodyObs = new MutationObserver((mutations) => {
-        for (const m of mutations) {
-          if (m.type !== 'childList') continue;
-          const nodes = [...m.addedNodes, ...m.removedNodes];
-          for (const n of nodes) {
-            if (n && n.nodeType === 1) {
-              const el = /** @type {Element} */(n);
-              if (el.matches?.('[data-element-id="chat-input-actions"]') || el.querySelector?.('[data-element-id="chat-input-actions"]')) {
-                observeComposerActions();
-                observeEditMode();
-                settleThenSync(40);
-                scheduleEnsureOrder();
-                return;
-              }
-            }
-          }
-        }
-      });
-      bodyObs.observe(document.body, { childList: true, subtree: true });
-      document.body.__tmxComposerBodyObs = bodyObs;
-    }
-  
-  // -------- fetch wrapper (set reasoning.effort only when present) --------
-  const OAI_URL = 'https://api.openai.com/v1/responses';
-  const SUPPORTED_EFFORTS = ['minimal', 'low', 'medium', 'high', 'none'];
-
-  function mapSelectedEffort() {
-    try {
-      const raw = (localStorage.getItem(KEY_SEL) || '').toLowerCase();
-      // UI stores: 'Minimal' | 'Low' | 'Medium' | 'High'
-      if (SUPPORTED_EFFORTS.includes(raw)) return raw;
-      // handle capitalized values just in case
-      const lower = raw.trim();
-      if (SUPPORTED_EFFORTS.includes(lower)) return lower;
-    } catch {}
+  // Normalize model ID for TM storage lookup (only supported models, no Codex)
+  const normalizeModelId = (text) => {
+    if (!text) return null;
+    const clean = text.toLowerCase().trim();
+    // Exclude Codex models
+    if (clean.includes('codex')) return null;
+    // Check for supported models in order of specificity
+    if (clean.includes('5.2')) return 'gpt-5.2';
+    if (clean.includes('5.1')) return 'gpt-5.1';
+    if (clean.includes('gpt') && clean.includes('5')) return 'gpt-5';
     return null;
-  }
+  };
 
-  function isGpt5ModelName(name) {
-    return !!name && String(name).toLowerCase().includes('gpt-5');
-  }
+  // Get model button element
+  const getModelButton = () => {
+    const actions = $(SELECTORS.composerActions);
+    if (!actions) return null;
+    
+    let container = actions.parentElement;
+    for (let i = 0; i < 5 && container; i++) {
+      const btn = $$('button', container).find(b => 
+        /gpt[-\s]?\d|claude|gemini/i.test(b.textContent || '')
+      );
+      if (btn) return btn;
+      container = container.parentElement;
+    }
+    return null;
+  };
+
+  // Check if current model is a supported GPT-5 model (not Codex)
+  const shouldShowPill = () => {
+    const btn = getModelButton();
+    if (!btn) return false;
+    const modelId = normalizeModelId(btn.textContent);
+    return modelId && SUPPORTED_MODELS.includes(modelId);
+  };
   
-  function isGpt51ModelName(name) {
-    if (!name) return false;
-    const normalized = String(name).toLowerCase().replace(/[^a-z0-9.]/g, '');
-    return normalized.includes('gpt5.1') || normalized.includes('gpt51');
-  }
+  // Get current model ID from button
+  const getCurrentModelFromButton = () => {
+    const btn = getModelButton();
+    return btn ? normalizeModelId(btn.textContent) : null;
+  };
+  
+  // Get effort options for a model
+  const getEffortOptionsForModel = (modelId) => {
+    return MODEL_EFFORT_OPTIONS[modelId] || MODEL_EFFORT_OPTIONS['gpt-5'];
+  };
 
-  function installEffortWrapper() {
-    if (window.fetch && window.fetch.__tmxEffortWrapped) return;
-    const prevFetch = window.fetch;
-
-    async function wrappedFetch(input, init) {
-      try {
-        const url = input instanceof Request ? input.url : String(input);
-        const method = (init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
-        if (!url.startsWith(OAI_URL) || method !== 'POST') {
-          return prevFetch.apply(this, arguments);
+  // ============ STORAGE ============
+  // Read effort from TM's native storage
+  const getEffortFromTM = (modelId) => {
+    try {
+      const settings = JSON.parse(localStorage.getItem(TM_STORAGE_KEY) || '{}');
+      const effort = settings[modelId]?.modelParameters?.reasoningEffort;
+      if (effort) {
+        const options = getEffortOptionsForModel(modelId);
+        const normalized = effort.charAt(0).toUpperCase() + effort.slice(1).toLowerCase();
+        if (options.map(o => o.toLowerCase()).includes(effort.toLowerCase())) {
+          return normalized;
         }
+      }
+    } catch {}
+    return DEFAULT_EFFORT;
+  };
 
-        // Read body text
-        let body = init?.body;
-        if (!body && input instanceof Request && method !== 'GET' && method !== 'HEAD') {
-          try { body = await input.clone().text(); } catch {}
-        }
-        const text = typeof body === 'string' ? body : (body instanceof Blob ? await body.text() : null);
-        if (!text) return prevFetch.apply(this, arguments);
+  // Write effort to TM's native storage (for persistence)
+  const setEffortInTM = (modelId, effort) => {
+    try {
+      const settings = JSON.parse(localStorage.getItem(TM_STORAGE_KEY) || '{}');
+      if (settings[modelId]?.modelParameters) {
+        settings[modelId].modelParameters.reasoningEffort = effort.toLowerCase();
+        localStorage.setItem(TM_STORAGE_KEY, JSON.stringify(settings));
+      }
+    } catch {}
+  };
 
-        // Parse JSON payload
-        let payload;
-        try { payload = JSON.parse(text); } catch { return prevFetch.apply(this, arguments); }
+  // Current session effort (for immediate effect via fetch wrapper)
+  let currentEffort = DEFAULT_EFFORT;
+  let currentModelId = null;
 
-        // Preconditions
-        const selected = mapSelectedEffort();
-        if (!selected) return prevFetch.apply(this, arguments);
-        if (!isGpt5ModelName(payload?.model)) return prevFetch.apply(this, arguments);
-        if (!payload || typeof payload !== 'object' || !payload.reasoning || typeof payload.reasoning !== 'object') {
-          // Respect rule: do nothing if reasoning object is absent
-          return prevFetch.apply(this, arguments);
-        }
-
-        const current = (payload.reasoning.effort || '').toLowerCase();
-        
-        // Map UI selection to API value based on model
-        let targetEffort = selected;
-        if (selected === 'minimal') {
-          // GPT-5.1 uses 'none' instead of 'minimal'
-          targetEffort = isGpt51ModelName(payload.model) ? 'none' : 'minimal';
-        }
-        
-        if (current === targetEffort) {
-          // No change needed
-          return prevFetch.apply(this, arguments);
-        }
-
-        // Apply only the effort field, preserve everything else
-        payload.reasoning.effort = targetEffort;
-
-        // Rebuild request
-        const newBody = JSON.stringify(payload);
-        const newHeaders = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
-        newHeaders.set('content-type', 'application/json');
-        newHeaders.delete('content-length');
-
-        return prevFetch(url, {
-          ...init,
-          method,
-          headers: newHeaders,
-          body: newBody,
-          credentials: init?.credentials ?? (input instanceof Request ? input.credentials : undefined),
-          cache: init?.cache ?? (input instanceof Request ? input.cache : undefined),
-          mode: init?.mode ?? (input instanceof Request ? input.mode : undefined),
-          redirect: init?.redirect ?? (input instanceof Request ? input.redirect : undefined),
-          referrer: init?.referrer ?? (input instanceof Request ? input.referrer : undefined),
-          referrerPolicy: init?.referrerPolicy ?? (input instanceof Request ? input.referrerPolicy : undefined)
-        });
-      } catch {
-        return prevFetch.apply(this, arguments);
+  // Initialize effort from TM storage based on current model
+  const syncEffortFromModel = () => {
+    const modelId = getCurrentModelFromButton();
+    if (!modelId) return;
+    
+    // If model changed, validate current effort is available for new model
+    if (modelId !== currentModelId) {
+      currentModelId = modelId;
+      const options = getEffortOptionsForModel(modelId);
+      
+      // Check if current effort is valid for this model
+      if (!options.map(o => o.toLowerCase()).includes(currentEffort.toLowerCase())) {
+        // Reset to default or first available option
+        currentEffort = options.includes(DEFAULT_EFFORT) ? DEFAULT_EFFORT : options[0];
       }
     }
+    
+    // Read from TM storage
+    currentEffort = getEffortFromTM(modelId);
+  };
 
-    wrappedFetch.__tmxEffortWrapped = true;
-    try { window.fetch = wrappedFetch; } catch {}
-    try { globalThis.fetch = wrappedFetch; } catch {}
+  // ============ STYLES ============
+  const injectStyles = () => {
+    if ($(`#${IDS.styles}`)) return;
+    
+    const css = `
+      #${IDS.wrapper} {
+        display: inline-flex;
+        align-items: center;
+        margin-left: 0.25rem;
+      }
+      
+      #${IDS.button} {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        height: 2.25rem;
+        padding: 0 0.75rem;
+        border-radius: 0.5rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+        background: rgb(191 219 254);
+        color: rgb(37 99 235);
+        transition: background 0.15s;
+      }
+      .dark #${IDS.button} {
+        background: rgb(30 58 138);
+        color: rgb(191 219 254);
+      }
+      #${IDS.button}:hover {
+        background: rgb(147 197 253);
+      }
+      .dark #${IDS.button}:hover {
+        background: rgb(30 64 175);
+      }
+      
+      #${IDS.menu} {
+        position: fixed;
+        z-index: 2147483000;
+        min-width: 10rem;
+        padding: 0.25rem;
+        background: white;
+        border: 1px solid rgba(0,0,0,0.1);
+        border-radius: 0.5rem;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+      }
+      .dark #${IDS.menu} {
+        background: rgb(30 41 59);
+        border-color: rgba(255,255,255,0.1);
+      }
+      
+      .tmx-effort-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        font-size: 0.875rem;
+      }
+      .tmx-effort-item:hover {
+        background: rgba(0,0,0,0.05);
+      }
+      .dark .tmx-effort-item:hover {
+        background: rgba(255,255,255,0.1);
+      }
+      .tmx-effort-item[data-selected="true"]::after {
+        content: '✓';
+        font-size: 0.75rem;
+      }
+      
+      .tmx-hidden { display: none !important; }
+    `;
+    
+    const style = document.createElement('style');
+    style.id = IDS.styles;
+    style.textContent = css;
+    document.head.appendChild(style);
+  };
+
+  // ============ UI ============
+  // Simple thinking icon SVG
+  const thinkIcon = `<svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+    <path d="M16.585 10C16.585 6.363 13.637 3.415 10 3.415C6.363 3.415 3.415 6.363 3.415 10C3.415 13.637 6.363 16.585 10 16.585C13.637 16.585 16.585 13.637 16.585 10ZM17.915 10C17.915 14.371 14.371 17.915 10 17.915C5.629 17.915 2.085 14.371 2.085 10C2.085 5.629 5.629 2.085 10 2.085C14.371 2.085 17.915 5.629 17.915 10Z"/>
+    <path d="M12.084 0.005C12.451 0.005 12.749 0.303 12.749 0.67C12.749 1.037 12.451 1.335 12.084 1.335H7.917C7.549 1.335 7.252 1.037 7.252 0.67C7.252 0.303 7.549 0.005 7.917 0.005H12.084Z"/>
+    <path d="M11.299 10.75C10.885 11.468 9.968 11.713 9.25 11.299C8.533 10.885 8.287 9.967 8.701 9.25C9.451 7.951 12.067 5.42 12.5 5.67C12.933 5.92 12.049 9.451 11.299 10.75Z"/>
+  </svg>`;
+
+  let menuEl = null;
+  let isMenuOpen = false;
+  let currentMenuModelId = null;
+
+  const createMenu = (modelId) => {
+    const options = getEffortOptionsForModel(modelId);
+    
+    // Rebuild menu if model changed or doesn't exist
+    if (menuEl && currentMenuModelId === modelId) {
+      return menuEl;
+    }
+    
+    // Remove old menu if exists
+    if (menuEl) {
+      menuEl.remove();
+      menuEl = null;
+    }
+    
+    currentMenuModelId = modelId;
+    menuEl = document.createElement('div');
+    menuEl.id = IDS.menu;
+    menuEl.className = 'tmx-hidden';
+    
+    options.forEach(option => {
+      const item = document.createElement('div');
+      item.className = 'tmx-effort-item';
+      item.textContent = option;
+      item.dataset.value = option;
+      item.dataset.selected = option === currentEffort ? 'true' : 'false';
+      
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectEffort(option);
+        closeMenu();
+      });
+      
+      menuEl.appendChild(item);
+    });
+    
+    document.body.appendChild(menuEl);
+    return menuEl;
+  };
+
+  const updateMenuSelection = () => {
+    if (!menuEl) return;
+    menuEl.querySelectorAll('.tmx-effort-item').forEach(item => {
+      item.dataset.selected = item.dataset.value === currentEffort ? 'true' : 'false';
+    });
+  };
+
+  const positionMenu = (btn) => {
+    if (!menuEl) return;
+    const rect = btn.getBoundingClientRect();
+    const menuHeight = menuEl.offsetHeight || 120;
+    const menuWidth = menuEl.offsetWidth || 160;
+    
+    let top = rect.bottom + 6;
+    let left = rect.left;
+    
+    // Flip up if not enough space below
+    if (top + menuHeight > window.innerHeight - 10) {
+      top = rect.top - menuHeight - 6;
+    }
+    // Keep within viewport horizontally
+    if (left + menuWidth > window.innerWidth - 10) {
+      left = window.innerWidth - menuWidth - 10;
+    }
+    
+    menuEl.style.top = `${top}px`;
+    menuEl.style.left = `${left}px`;
+  };
+
+  const openMenu = (btn) => {
+    const modelId = getCurrentModelFromButton();
+    if (!modelId) return;
+    
+    createMenu(modelId);
+    updateMenuSelection();
+    menuEl.classList.remove('tmx-hidden');
+    positionMenu(btn);
+    isMenuOpen = true;
+    
+    // Close on outside click
+    setTimeout(() => {
+      document.addEventListener('click', handleOutsideClick, true);
+    }, 0);
+  };
+
+  const closeMenu = () => {
+    if (menuEl) menuEl.classList.add('tmx-hidden');
+    isMenuOpen = false;
+    document.removeEventListener('click', handleOutsideClick, true);
+  };
+
+  const handleOutsideClick = (e) => {
+    const btn = $(`#${IDS.button}`);
+    if (menuEl && !menuEl.contains(e.target) && (!btn || !btn.contains(e.target))) {
+      closeMenu();
+    }
+  };
+
+  const selectEffort = (effort) => {
+    currentEffort = effort;
+    
+    // Update button label
+    const btn = $(`#${IDS.button}`);
+    if (btn) {
+      const label = btn.querySelector('span');
+      if (label) label.textContent = effort;
+    }
+    
+    // Update TM storage for persistence
+    const modelBtn = getModelButton();
+    if (modelBtn) {
+      const modelId = normalizeModelId(modelBtn.textContent);
+      if (modelId) {
+        setEffortInTM(modelId, effort);
+      }
+    }
+    
+    updateMenuSelection();
+  };
+
+  // ============ MOUNT/UNMOUNT ============
+  const mountPill = () => {
+    if ($(`#${IDS.wrapper}`)) return;
+    
+    injectStyles();
+    syncEffortFromModel();
+    
+    const thinkBtn = $(SELECTORS.thinkButton);
+    const actions = $(SELECTORS.composerActions);
+    if (!thinkBtn && !actions) return;
+    
+    // Create wrapper
+    const wrapper = document.createElement('span');
+    wrapper.id = IDS.wrapper;
+    
+    // Create button
+    const btn = document.createElement('button');
+    btn.id = IDS.button;
+    btn.type = 'button';
+    btn.title = 'Reasoning effort level';
+    btn.innerHTML = `${thinkIcon}<span>${currentEffort}</span>`;
+    
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (isMenuOpen) {
+        closeMenu();
+      } else {
+        openMenu(btn);
+      }
+    });
+    
+    wrapper.appendChild(btn);
+    
+    // Insert after Think button or at start of actions
+    if (thinkBtn && thinkBtn.parentElement) {
+      thinkBtn.parentElement.insertBefore(wrapper, thinkBtn.nextSibling);
+    } else if (actions) {
+      const leftGroup = actions.querySelector('.items-center.justify-start') || actions.firstElementChild || actions;
+      leftGroup.insertBefore(wrapper, leftGroup.firstChild);
+    }
+  };
+
+  const unmountPill = () => {
+    $(`#${IDS.wrapper}`)?.remove();
+    closeMenu();
+  };
+
+  // ============ VISIBILITY SYNC ============
+  const syncVisibility = () => {
+    const show = shouldShowPill();
+    const mounted = !!$(`#${IDS.wrapper}`);
+    
+    if (show && !mounted) {
+      mountPill();
+    } else if (!show && mounted) {
+      unmountPill();
+    } else if (show && mounted) {
+      // Model might have changed, sync effort from new model
+      syncEffortFromModel();
+      const btn = $(`#${IDS.button}`);
+      if (btn) {
+        const label = btn.querySelector('span');
+        if (label) label.textContent = currentEffort;
+      }
+    }
+  };
+
+  // ============ OBSERVER ============
+  // Single observer for composer area changes
+  let observer = null;
+  let debounceTimer = null;
+
+  const debouncedSync = () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(syncVisibility, 50);
+  };
+
+  const startObserver = () => {
+    if (observer) return;
+    
+    observer = new MutationObserver((mutations) => {
+      // Check if any mutation is relevant (model change, composer change)
+      for (const m of mutations) {
+        if (m.type === 'characterData' || m.type === 'childList') {
+          debouncedSync();
+          return;
+        }
+        if (m.type === 'attributes' && m.attributeName === 'class') {
+          debouncedSync();
+          return;
+        }
+      }
+    });
+    
+    // Observe body for SPA navigation and composer changes
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ['class']
+    });
+  };
+
+  // ============ FETCH WRAPPER ============
+  // Get model ID from API model name
+  const getModelIdFromApiName = (modelName) => {
+    if (!modelName) return null;
+    const name = modelName.toLowerCase();
+    // Exclude Codex
+    if (name.includes('codex')) return null;
+    if (name.includes('gpt-5.2') || name.includes('gpt5.2')) return 'gpt-5.2';
+    if (name.includes('gpt-5.1') || name.includes('gpt5.1')) return 'gpt-5.1';
+    if (name.includes('gpt-5') || name.includes('gpt5')) return 'gpt-5';
+    return null;
+  };
+
+  const installFetchWrapper = () => {
+    if (window.fetch.__tmxEffortV2) return;
+    
+    const originalFetch = window.fetch;
+    
+    window.fetch = async function(input, init) {
+      try {
+        const url = typeof input === 'string' ? input : input.url;
+        const method = (init?.method || 'GET').toUpperCase();
+        
+        // Only intercept OpenAI responses API POST requests
+        if (!url.startsWith(OAI_API_URL) || method !== 'POST') {
+          return originalFetch.apply(this, arguments);
+        }
+        
+        // Get request body
+        let bodyText = init?.body;
+        if (typeof bodyText !== 'string') {
+          return originalFetch.apply(this, arguments);
+        }
+        
+        // Parse and check if it's a supported GPT-5 model with reasoning
+        let payload;
+        try {
+          payload = JSON.parse(bodyText);
+        } catch {
+          return originalFetch.apply(this, arguments);
+        }
+        
+        // Get model ID and check if supported
+        const modelId = getModelIdFromApiName(payload?.model);
+        if (!modelId || !payload?.reasoning) {
+          return originalFetch.apply(this, arguments);
+        }
+        
+        // Apply current effort (lowercase for API)
+        payload.reasoning.effort = currentEffort.toLowerCase();
+        
+        console.log(`[ReasoningEffort v2] Applied effort: ${currentEffort} to ${modelId}`);
+        
+        // Rebuild request
+        const newInit = {
+          ...init,
+          body: JSON.stringify(payload),
+          headers: new Headers(init?.headers)
+        };
+        newInit.headers.set('content-type', 'application/json');
+        
+        return originalFetch.call(this, input, newInit);
+      } catch {
+        return originalFetch.apply(this, arguments);
+      }
+    };
+    
+    window.fetch.__tmxEffortV2 = true;
+  };
+
+  // ============ INIT ============
+  const init = () => {
+    installFetchWrapper();
+    startObserver();
+    
+    // Initial sync after a short delay for DOM to settle
+    setTimeout(syncVisibility, 150);
+    
+    // Handle route changes
+    window.addEventListener('popstate', () => setTimeout(syncVisibility, 150));
+    window.addEventListener('hashchange', () => setTimeout(syncVisibility, 150));
+  };
+
+  // Start when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
   }
 
-  installEffortWrapper();
- 
-  // Initial boot
-  setTimeout(() => {
-    observeComposerActions();
-    observeEditMode();
-    settleThenSync(20);
-  }, 120);
-  })();
-  
+  console.log('[ReasoningEffort v2] Loaded');
+})();
+
