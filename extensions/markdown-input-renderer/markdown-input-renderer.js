@@ -93,7 +93,16 @@
         editType: localStorage.getItem(CONFIG.STORAGE.EDIT_TYPE) || CONFIG.EDIT_TYPES.MARKDOWN,
         // Observer references for cleanup
         chatObserver: null,
-        themeObserver: null
+        themeObserver: null,
+
+        // Internal perf guards
+        _syncScheduled: false,
+        _lastSyncedMarkdown: null,
+        _lastSeenTextareaValue: null,
+        _boundEditorForChange: null,
+        _boundEditableForDomEvents: null,
+        _keydownHandler: null,
+        _pasteHandler: null
     };
 
     // ==============================
@@ -107,6 +116,9 @@
     // Library Loading
     // ==============================
     function loadCSS(href) {
+        // Avoid injecting duplicate stylesheets
+        if (document.querySelector(`link[rel="stylesheet"][href="${href}"]`)) return;
+
         const link = document.createElement('link');
         link.rel = 'stylesheet';
         link.href = href;
@@ -115,6 +127,14 @@
 
     function loadScript(src) {
         return new Promise((resolve, reject) => {
+            // If a script tag already exists, assume it is loading (or will load) and wait for it.
+            const existing = document.querySelector(`script[src="${src}"]`);
+            if (existing) {
+                existing.addEventListener('load', resolve, { once: true });
+                existing.addEventListener('error', () => reject(new Error(`Failed to load script: ${src}`)), { once: true });
+                return;
+            }
+
             const script = document.createElement('script');
             script.src = src;
             script.onload = resolve;
@@ -199,13 +219,39 @@
     // ==============================
     // React Integration
     // ==============================
-    function syncToReactTextarea() {
+    const TEXTAREA_VALUE_SETTER = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+
+    function syncToReactTextarea({ emitChange = false } = {}) {
+        if (!state.editor || !state.textarea) return;
+
         const content = state.editor.getMarkdown();
-        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
-        setter.call(state.textarea, content);
-        
+
+        // Avoid redundant writes + event storms (important for typing performance)
+        if (content === state._lastSyncedMarkdown) return;
+        state._lastSyncedMarkdown = content;
+
+        if (TEXTAREA_VALUE_SETTER) {
+            TEXTAREA_VALUE_SETTER.call(state.textarea, content);
+        } else {
+            state.textarea.value = content;
+        }
+
+        // TypingMind/React generally only needs `input` to update state while typing.
+        // `change` can be heavier and is normally emitted on commit/blur, not per keystroke.
         state.textarea.dispatchEvent(new Event('input', { bubbles: true }));
-        state.textarea.dispatchEvent(new Event('change', { bubbles: true }));
+        if (emitChange) {
+            state.textarea.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    function scheduleSyncToReactTextarea() {
+        if (state._syncScheduled) return;
+        state._syncScheduled = true;
+
+        requestAnimationFrame(() => {
+            state._syncScheduled = false;
+            syncToReactTextarea();
+        });
     }
 
     // ==============================
@@ -391,8 +437,12 @@
 
     function setupSplitTab() {
         setTimeout(() => {
+            // If the editor was removed (chat navigation), don't keep retrying forever.
+            if (!state.container || !document.body.contains(state.container)) return;
+
             const modeSwitch = state.container.querySelector(CONFIG.SELECTORS.MODE_SWITCH);
             if (!modeSwitch) {
+                // Retry only while the container still exists
                 setTimeout(setupSplitTab, CONFIG.DELAYS.SPELLCHECK);
                 return;
             }
@@ -514,8 +564,8 @@
         return () => {
             // Wait for paste content to be inserted, then force height adjustment
             requestAnimationFrame(() => {
-                // Force sync to update content
-                syncToReactTextarea();
+                // Schedule sync to update content (coalesces multiple triggers)
+                scheduleSyncToReactTextarea();
                 
                 // Multiple approaches to force editor to recalculate height
                 const mdContainer = state.container.querySelector(CONFIG.SELECTORS.MD_CONTAINER);
@@ -555,7 +605,8 @@
         const content = state.editor.getMarkdown().trim();
         if (!content) return;
         
-        syncToReactTextarea();
+        // Ensure TypingMind state is fully up to date before sending
+        syncToReactTextarea({ emitChange: true });
         
         setTimeout(() => {
             const sendButton = document.querySelector(CONFIG.SELECTORS.SEND_BUTTON);
@@ -580,17 +631,28 @@
     // Editor Setup
     // ==============================
     function attachEditorHandlers() {
-        state.editor.on('change', syncToReactTextarea);
+        // Avoid stacking duplicate editor change handlers (can multiply work over time)
+        if (state._boundEditorForChange !== state.editor) {
+            state._boundEditorForChange = state.editor;
+            state.editor.on('change', scheduleSyncToReactTextarea);
+        }
         
         setTimeout(() => {
             const editableArea = state.container.querySelector(CONFIG.SELECTORS.EDITABLE);
             if (!editableArea) return;
             
             editableArea.setAttribute('spellcheck', 'true');
+
+            // Avoid stacking duplicate DOM listeners when Toast UI swaps the editable element
+            if (state._boundEditableForDomEvents === editableArea) return;
+            state._boundEditableForDomEvents = editableArea;
+
+            if (!state._keydownHandler) state._keydownHandler = createKeydownHandler();
+            if (!state._pasteHandler) state._pasteHandler = createPasteHandler();
+
             // Use capture phase (true) to intercept BEFORE the editor processes the key
-            editableArea.addEventListener('keydown', createKeydownHandler(), true);
-            editableArea.addEventListener('paste', createPasteHandler());
-            editableArea.addEventListener('input', syncToReactTextarea);
+            editableArea.addEventListener('keydown', state._keydownHandler, true);
+            editableArea.addEventListener('paste', state._pasteHandler);
         }, CONFIG.DELAYS.KEYBOARD_SETUP);
     }
 
@@ -628,8 +690,17 @@
             set(newValue) {
                 originalSetter.call(this, newValue);
 
+                if (!state.editor || typeof newValue !== 'string') return;
+
+                // Fast-path: ignore React echo / our own sync to avoid extra getMarkdown() calls.
+                if (newValue === state._lastSyncedMarkdown || newValue === state._lastSeenTextareaValue) {
+                    state._lastSeenTextareaValue = newValue;
+                    return;
+                }
+                state._lastSeenTextareaValue = newValue;
+
                 // Sync to editor if value changed externally (edit message feature)
-                if (state.editor && typeof newValue === 'string' && newValue !== state.editor.getMarkdown()) {
+                if (newValue !== state.editor.getMarkdown()) {
                     state.editor.setMarkdown(newValue);
                 }
             },
@@ -667,7 +738,10 @@
             });
         });
 
-        state.chatObserver.observe(document.body, {
+        // Observing `document.body` can be noisy; `main` is usually enough and reduces callbacks.
+        const observeRoot = document.querySelector('main') || document.body;
+
+        state.chatObserver.observe(observeRoot, {
             childList: true,
             subtree: true
         });
