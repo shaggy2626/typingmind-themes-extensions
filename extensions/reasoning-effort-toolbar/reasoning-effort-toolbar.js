@@ -45,7 +45,8 @@
     return null;
   };
 
-  const getModelId = () => {
+  // Returns custom model ID for models we patch in the fetch wrapper, or null
+  const getCustomModelId = () => {
     const btn = getModelButton();
     if (!btn) return null;
     const t = btn.textContent.toLowerCase().trim();
@@ -57,22 +58,31 @@
     return null;
   };
 
-  const isOpus46 = () => getModelId() === 'claude-opus-4-6';
+  // Returns a storage key for ANY model (custom ID or cleaned button text)
+  const getModelKey = () => {
+    const custom = getCustomModelId();
+    if (custom) return custom;
+    const btn = getModelButton();
+    if (!btn) return null;
+    return btn.textContent.trim().toLowerCase().replace(/[^a-z0-9.]+/g, '-').replace(/-+/g, '-');
+  };
+
+  const isOpus46 = () => getCustomModelId() === 'claude-opus-4-6';
   const isThinkingOn = () => $(SEL.thinkBtn)?.getAttribute('aria-pressed') === 'true';
 
   // ============ STORAGE ============
   const loadStore = () => { try { return JSON.parse(localStorage.getItem(OUR_KEY) || '{}'); } catch { return {}; } };
 
-  const getEffort = (modelId) => {
-    const stored = loadStore()[modelId || '_'];
+  const getEffort = (key) => {
+    const stored = loadStore()[key];
     if (stored) return stored.charAt(0).toUpperCase() + stored.slice(1).toLowerCase();
-    return modelId === 'claude-opus-4-6' ? 'High' : 'High';
+    return 'High';
   };
 
   const saveEffort = (label) => {
     try {
       const data = loadStore();
-      data[currentModelId || '_generic'] = label.toLowerCase();
+      data[currentModelKey] = label.toLowerCase();
       localStorage.setItem(OUR_KEY, JSON.stringify(data));
     } catch {}
     // Also write to TM's storage so TM picks it up
@@ -90,13 +100,13 @@
 
   // Session state
   let currentEffort = 'High';
-  let currentModelId = null;
+  let currentModelKey = null;
 
   const syncEffort = () => {
-    const id = getModelId();
-    if (id && id !== currentModelId) {
-      currentModelId = id;
-      currentEffort = getEffort(id);
+    const key = getModelKey();
+    if (key && key !== currentModelKey) {
+      currentModelKey = key;
+      currentEffort = getEffort(key);
     }
   };
 
