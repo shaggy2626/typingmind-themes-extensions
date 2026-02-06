@@ -263,27 +263,13 @@ Keep your sidebar always expanded and stop it from auto-collapsing when you clic
 https://cdn.jsdelivr.net/gh/shaggy2626/typingmind-themes-extensions@latest/extensions/reasoning-effort-toolbar/reasoning-effort-toolbar.js
 ```
 
-Quickly adjust reasoning effort levels for GPT-5 models directly from the chat input toolbar. This extension adds a convenient pill button next to the Think toggle, letting you switch between effort levels without opening model settings. The selection persists per model and syncs with TypingMind's native storage.
-
-**Supported Models:**
-- **GPT-5** (gpt-5)
-- **GPT-5.1** (gpt-5.1)
-- **GPT-5.2** (gpt-5.2)
-
-*Note: Does not support GPT-5 Codex variants.*
-
-**Effort Options by Model:**
-| Model | Available Options |
-|-------|-------------------|
-| GPT-5 | Minimal, Low, Medium, High |
-| GPT-5.1 | None, Low, Medium, High |
-| GPT-5.2 | None, Low, Medium, High, Xhigh |
+Tired of clicking the thinking lightbulb off and back on every time you want to change the reasoning effort level? This extension fixes that. Once thinking is enabled, clicking the lightbulb opens a quick effort menu right there—no toggling required. It also brings Claude Opus 4.6 up to speed with Anthropic's latest adaptive thinking API, which TypingMind hasn't implemented yet.
 
 **Features:**
-- **Smart Model Detection:** Only appears when a supported GPT-5 model is selected.
-- **Model-Specific Options:** Dynamically shows the correct effort levels for each model.
-- **Persistent Selection:** Remembers your choice per model across sessions.
-- **Native Storage Sync:** Integrates with TypingMind's model settings for consistency.
-- **Instant Effect:** Changes apply immediately via fetch wrapper—no page refresh needed.
-- **Clean UI:** Matches TypingMind's Think button style with automatic light/dark mode support.
-- **Lightweight:** Event-driven with debounced observers—no polling, minimal CPU usage.
+- **One-Click Effort Change:** When thinking is on, click the lightbulb to pick a new effort level instantly—Low, Medium, High, and more depending on the model.
+- **Works on Every Model:** Any model with a thinking toggle gets the improved menu. No model-specific setup needed.
+- **Claude Opus 4.6 Support:** Automatically uses Anthropic's new adaptive thinking mode and sends the correct effort levels (Low, Medium, High, Max) behind the scenes.
+- **Disable Thinking Option:** A "Disable thinking" option at the bottom of the menu lets you turn it off when you need to—without it being the default action.
+- **Native Look and Feel:** The menu matches TypingMind's own styling, icons, and layout. It looks and feels like it's part of the app.
+- **Persistent Selection:** Remembers your effort choice per model between sessions.
+- **Lightweight:** Uses targeted observers scoped to just the composer area—no page-wide polling or unnecessary overhead.
