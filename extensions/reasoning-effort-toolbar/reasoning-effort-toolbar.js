@@ -3,6 +3,8 @@
 // lightbulb shows an effort menu instead of toggling off.
 // Custom models (fetch-intercepted, no "Disable thinking"):
 //   claude-opus-4-6:       Low/Medium/High/Max  (adaptive thinking + output_config.effort)
+//   claude-sonnet-4-6:     Low/Medium/High/Max  (adaptive thinking + output_config.effort)
+//   gemini-3.1-pro-preview: Low/Medium/High      (thinkingConfig.thinkingLevel)
 //   gemini-3-pro-preview:  Low/High             (thinkingConfig.thinkingLevel)
 //   gemini-3-flash-preview: Minimal/Low/Medium/High (thinkingConfig.thinkingLevel)
 //   gpt-5.2:               None/Low/Medium/High/Xhigh (reasoning.effort)
@@ -54,8 +56,10 @@
     const t = btn.textContent.toLowerCase().trim();
     if (t.includes('codex')) return null;
     if (t.includes('gemini') && t.includes('3') && t.includes('flash')) return 'gemini-3-flash-preview';
-    if (t.includes('gemini') && t.includes('3') && t.includes('pro') && !t.includes('image')) return 'gemini-3-pro-preview';
+    if (t.includes('gemini') && t.includes('3.1') && t.includes('pro') && !t.includes('image')) return 'gemini-3.1-pro-preview';
+    if (t.includes('gemini') && t.includes('3') && t.includes('pro') && !t.includes('image') && !t.includes('3.1')) return 'gemini-3-pro-preview';
     if (t.includes('claude') && t.includes('opus') && t.includes('4.6')) return 'claude-opus-4-6';
+    if (t.includes('claude') && t.includes('sonnet') && t.includes('4.6')) return 'claude-sonnet-4-6';
     if (t.includes('5.2') && !t.includes('codex') && !t.includes('chat')) return 'gpt-5.2';
     return null;
   };
@@ -92,9 +96,9 @@
       localStorage.setItem(OUR_KEY, JSON.stringify(data));
     } catch {}
 
-    // Gemini 3 Pro/Flash: TM reads TM_useThinkingOptions for thinkingConfig.thinkingLevel
+    // Gemini 3.1 Pro/3 Pro/3 Flash: TM reads TM_useThinkingOptions for thinkingConfig.thinkingLevel
     try {
-      const isGemini3 = customId === 'gemini-3-pro-preview' || customId === 'gemini-3-flash-preview';
+      const isGemini3 = customId === 'gemini-3.1-pro-preview' || customId === 'gemini-3-pro-preview' || customId === 'gemini-3-flash-preview';
       if (isGemini3) {
         const thinking = JSON.parse(localStorage.getItem(TM_THINKING_KEY) || '{}');
         thinking.enabled = true;
@@ -106,17 +110,21 @@
     // Write to TM's per-model storage
     try {
       const settings = JSON.parse(localStorage.getItem(TM_KEY) || '{}');
-      if (customId && settings[customId]?.modelParameters) {
-        settings[customId].modelParameters.reasoningEffort = normalized;
+      const keysWithParams = Object.keys(settings).filter(key => settings[key]?.modelParameters);
+      const findTmModelKey = () => {
+        if (!customId) return null;
+        if (settings[customId]?.modelParameters) return customId;
+        const oneMillion = `${customId}-1m`;
+        if (settings[oneMillion]?.modelParameters) return oneMillion;
+        const prefix = keysWithParams.find(key => key.startsWith(`${customId}-`));
+        if (prefix) return prefix;
+        const contains = keysWithParams.find(key => key.includes(customId));
+        return contains || null;
+      };
+      const tmKey = findTmModelKey();
+      if (tmKey) {
+        settings[tmKey].modelParameters.reasoningEffort = normalized;
         localStorage.setItem(TM_KEY, JSON.stringify(settings));
-        return;
-      }
-      for (const key of Object.keys(settings)) {
-        if (settings[key]?.modelParameters) {
-          settings[key].modelParameters.reasoningEffort = normalized;
-          localStorage.setItem(TM_KEY, JSON.stringify(settings));
-          break;
-        }
       }
     } catch {}
   };
@@ -153,6 +161,11 @@
     { label: 'Low',  icon: chev(1) },
     { label: 'High', icon: chev(3) },
   ];
+  const GEMINI_31_PRO_ITEMS = [
+    { label: 'Low',    icon: chev(1) },
+    { label: 'Medium', icon: chev(2) },
+    { label: 'High',   icon: chev(3) },
+  ];
   const GEMINI_FLASH_ITEMS = [
     { label: 'Minimal', icon: minus },
     { label: 'Low',     icon: chev(1) },
@@ -177,6 +190,8 @@
   // Map custom model IDs to their menu item sets
   const CUSTOM_ITEMS = {
     'claude-opus-4-6':       OPUS_ITEMS,
+    'claude-sonnet-4-6':     OPUS_ITEMS,
+    'gemini-3.1-pro-preview': GEMINI_31_PRO_ITEMS,
     'gemini-3-pro-preview':  GEMINI_PRO_ITEMS,
     'gemini-3-flash-preview': GEMINI_FLASH_ITEMS,
     'gpt-5.2':               GPT52_ITEMS,
@@ -200,15 +215,18 @@
     if (!menuNode.textContent?.includes('Reasoning Effort')) return;
     if (menuNode.dataset.tmxMutated) return;
     menuNode.dataset.tmxMutated = 'true';
+    const isClaude46 = customId === 'claude-opus-4-6' || customId === 'claude-sonnet-4-6';
 
     menuNode.querySelectorAll('[role="menuitem"]').forEach(item => {
       const span = item.querySelector('span:last-child');
       if (!span) return;
       const label = span.textContent.trim();
 
-      if (customId === 'claude-opus-4-6') {
+      if (isClaude46) {
         if (label === 'Auto') { item.remove(); return; }
         if (label === 'Extra High') span.textContent = 'Max';
+      } else if (customId === 'gemini-3.1-pro-preview') {
+        if (label === 'Extra High' || label === 'Auto') { item.remove(); return; }
       } else if (customId === 'gemini-3-pro-preview') {
         if (label === 'Medium' || label === 'Extra High' || label === 'Auto') { item.remove(); return; }
       } else if (customId === 'gemini-3-flash-preview') {
@@ -218,7 +236,7 @@
         if (label === 'Extra High') span.textContent = 'Xhigh';
       }
 
-      const mapped = (customId === 'claude-opus-4-6' && label === 'Extra High') ? 'Max'
+      const mapped = (isClaude46 && label === 'Extra High') ? 'Max'
         : (customId === 'gpt-5.2' && label === 'Extra High') ? 'Xhigh'
         : label;
       item.addEventListener('click', () => {
@@ -395,6 +413,7 @@
     const n = name.toLowerCase();
     if (n.includes('codex')) return null;
     if ((n.includes('claude') && n.includes('opus') && n.includes('4') && n.includes('6')) || n === 'claude-opus-4-6') return 'claude-opus-4-6';
+    if ((n.includes('claude') && n.includes('sonnet') && n.includes('4') && n.includes('6')) || n === 'claude-sonnet-4-6') return 'claude-sonnet-4-6';
     if ((n.includes('gpt-5.2') || n.includes('gpt5.2')) && !n.includes('chat')) return 'gpt-5.2';
     return null;
   };
@@ -412,17 +431,18 @@
   };
 
   const handleAnthropic = (p) => {
-    if (getApiModelId(p?.model) !== 'claude-opus-4-6') return null;
+    const id = getApiModelId(p?.model);
+    if (id !== 'claude-opus-4-6' && id !== 'claude-sonnet-4-6') return null;
     if (p.thinking) p.thinking = { type: 'adaptive' };
     if (!p.output_config || typeof p.output_config !== 'object') p.output_config = {};
     p.output_config.effort = currentEffort.toLowerCase();
-    console.log(`${LOG} Anthropic: thinking→adaptive, effort→${currentEffort.toLowerCase()}`);
+    console.log(`${LOG} Anthropic: thinking→adaptive, effort→${currentEffort.toLowerCase()} for ${id}`);
     return p;
   };
 
   const handleGemini = (url, p) => {
     const isFlash = url.includes('gemini-3-flash');
-    const isPro = url.includes('gemini-3-pro') && !url.includes('image');
+    const isPro = (url.includes('gemini-3.1-pro') || url.includes('gemini-3-pro')) && !url.includes('image');
     if (!isFlash && !isPro) return null;
     if (!p.generationConfig || typeof p.generationConfig !== 'object') p.generationConfig = {};
     if (!p.generationConfig.thinkingConfig || typeof p.generationConfig.thinkingConfig !== 'object') p.generationConfig.thinkingConfig = {};
