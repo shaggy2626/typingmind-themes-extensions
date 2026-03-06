@@ -280,3 +280,4 @@ Tired of clicking the thinking lightbulb off and back on every time you want to 
 | Gemini 3 Pro | Low, High | Sets `thinkingConfig.thinkingLevel` in the Gemini API payload |
 | Gemini 3 Flash | Minimal, Low, Medium, High | Sets `thinkingConfig.thinkingLevel` in the Gemini API payload |
 | GPT-5.2 | None, Low, Medium, High, Xhigh | Sets `reasoning.effort` in the OpenAI API payload |
+| GPT-5.4 | None, Low, Medium, High, Xhigh | Sets `reasoning.effort` in the OpenAI API payload |

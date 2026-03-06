@@ -8,6 +8,7 @@
 //   gemini-3-pro-preview:  Low/High             (thinkingConfig.thinkingLevel)
 //   gemini-3-flash-preview: Minimal/Low/Medium/High (thinkingConfig.thinkingLevel)
 //   gpt-5.2:               None/Low/Medium/High/Xhigh (reasoning.effort)
+//   gpt-5.4:               None/Low/Medium/High/Xhigh (reasoning.effort)
 // All other models (incl. GPT-5, GPT-5.1): TM default options + "Disable thinking"
 // GPT-4.1/4o: strips invalid reasoning params
 // Version: 7.0
@@ -61,6 +62,7 @@
     if (t.includes('claude') && t.includes('opus') && t.includes('4.6')) return 'claude-opus-4-6';
     if (t.includes('claude') && t.includes('sonnet') && t.includes('4.6')) return 'claude-sonnet-4-6';
     if (t.includes('5.2') && !t.includes('codex') && !t.includes('chat')) return 'gpt-5.2';
+    if (t.includes('5.4') && !t.includes('codex') && !t.includes('chat')) return 'gpt-5.4';
     return null;
   };
 
@@ -195,6 +197,7 @@
     'gemini-3-pro-preview':  GEMINI_PRO_ITEMS,
     'gemini-3-flash-preview': GEMINI_FLASH_ITEMS,
     'gpt-5.2':               GPT52_ITEMS,
+    'gpt-5.4':               GPT52_ITEMS,
   };
 
   // TM Tailwind classes
@@ -216,29 +219,39 @@
     if (menuNode.dataset.tmxMutated) return;
     menuNode.dataset.tmxMutated = 'true';
     const isClaude46 = customId === 'claude-opus-4-6' || customId === 'claude-sonnet-4-6';
+    const isGptReasoning = customId === 'gpt-5.2' || customId === 'gpt-5.4';
 
     menuNode.querySelectorAll('[role="menuitem"]').forEach(item => {
       const span = item.querySelector('span:last-child');
       if (!span) return;
       const label = span.textContent.trim();
+      const norm = label.toLowerCase();
 
       if (isClaude46) {
-        if (label === 'Auto') { item.remove(); return; }
-        if (label === 'Extra High') span.textContent = 'Max';
+        if (norm === 'auto') { item.remove(); return; }
+        if (norm === 'extra high') span.textContent = 'Max';
       } else if (customId === 'gemini-3.1-pro-preview') {
-        if (label === 'Extra High' || label === 'Auto') { item.remove(); return; }
+        if (norm === 'extra high' || norm === 'auto') { item.remove(); return; }
       } else if (customId === 'gemini-3-pro-preview') {
-        if (label === 'Medium' || label === 'Extra High' || label === 'Auto') { item.remove(); return; }
+        if (norm === 'medium' || norm === 'extra high' || norm === 'auto') { item.remove(); return; }
       } else if (customId === 'gemini-3-flash-preview') {
-        if (label === 'Extra High' || label === 'Auto') { item.remove(); return; }
-      } else if (customId === 'gpt-5.2') {
-        if (label === 'Auto') { item.remove(); return; }
-        if (label === 'Extra High') span.textContent = 'Xhigh';
+        if (norm === 'extra high' || norm === 'auto') { item.remove(); return; }
+      } else if (isGptReasoning) {
+        if (norm === 'auto') { item.remove(); return; }
+        if (norm === 'extra high') span.textContent = 'Xhigh';
       }
 
-      const mapped = (isClaude46 && label === 'Extra High') ? 'Max'
-        : (customId === 'gpt-5.2' && label === 'Extra High') ? 'Xhigh'
-        : label;
+      const mapped =
+        (norm === 'none') ? 'None'
+          : (norm === 'minimal') ? 'Minimal'
+            : (norm === 'low') ? 'Low'
+              : (norm === 'medium') ? 'Medium'
+                : (norm === 'high') ? 'High'
+                  : (norm === 'xhigh') ? 'Xhigh'
+                    : (norm === 'max') ? 'Max'
+                      : (norm === 'extra high' && isClaude46) ? 'Max'
+                        : (norm === 'extra high' && isGptReasoning) ? 'Xhigh'
+                          : label;
       item.addEventListener('click', () => {
         currentEffort = mapped;
         saveEffort(mapped);
@@ -415,6 +428,7 @@
     if ((n.includes('claude') && n.includes('opus') && n.includes('4') && n.includes('6')) || n === 'claude-opus-4-6') return 'claude-opus-4-6';
     if ((n.includes('claude') && n.includes('sonnet') && n.includes('4') && n.includes('6')) || n === 'claude-sonnet-4-6') return 'claude-sonnet-4-6';
     if ((n.includes('gpt-5.2') || n.includes('gpt5.2')) && !n.includes('chat')) return 'gpt-5.2';
+    if ((n.includes('gpt-5.4') || n.includes('gpt5.4')) && !n.includes('chat')) return 'gpt-5.4';
     return null;
   };
 
@@ -461,7 +475,7 @@
       return mod ? p : null;
     }
     const id = getApiModelId(p?.model);
-    if (id !== 'gpt-5.2' || !p?.reasoning) return null;
+    if ((id !== 'gpt-5.2' && id !== 'gpt-5.4') || !p?.reasoning) return null;
     p.reasoning.effort = currentEffort.toLowerCase();
     console.log(`${LOG} OpenAI: effort→${currentEffort.toLowerCase()} for ${id}`);
     return p;
