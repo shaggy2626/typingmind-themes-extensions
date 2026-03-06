@@ -102,7 +102,8 @@
         _boundEditorForChange: null,
         _boundEditableForDomEvents: null,
         _keydownHandler: null,
-        _pasteHandler: null
+        _pasteHandler: null,
+        _nativeSendClickHandler: null
     };
 
     // ==============================
@@ -627,6 +628,39 @@
         }, CONFIG.DELAYS.CLEAR_AFTER_SEND);
     }
 
+    function reconcileEditorAfterNativeSend(attempt = 0) {
+        if (!state.editor || !state.textarea) return;
+
+        const textareaValue = state.textarea.value;
+        const editorContent = state.editor.getMarkdown();
+
+        // Only clear the Toast UI editor after TypingMind has actually cleared
+        // its hidden textarea. This avoids wiping content on failed sends.
+        if (!textareaValue && editorContent) {
+            state.editor.setMarkdown('');
+            syncToReactTextarea();
+
+            const mdContainer = state.container?.querySelector(CONFIG.SELECTORS.MD_CONTAINER);
+            if (mdContainer) mdContainer.style.height = 'auto';
+            return;
+        }
+
+        if (attempt >= 5 || !editorContent) return;
+        setTimeout(() => reconcileEditorAfterNativeSend(attempt + 1), 100);
+    }
+
+    function createNativeSendClickHandler() {
+        return (event) => {
+            const sendButton = event.target?.closest?.(CONFIG.SELECTORS.SEND_BUTTON);
+            if (!sendButton || !event.isTrusted || !state.editor || !state.textarea) return;
+
+            const content = state.editor.getMarkdown().trim();
+            if (!content) return;
+
+            setTimeout(() => reconcileEditorAfterNativeSend(), CONFIG.DELAYS.CLEAR_AFTER_SEND);
+        };
+    }
+
     // ==============================
     // Editor Setup
     // ==============================
@@ -654,6 +688,11 @@
             editableArea.addEventListener('keydown', state._keydownHandler, true);
             editableArea.addEventListener('paste', state._pasteHandler);
         }, CONFIG.DELAYS.KEYBOARD_SETUP);
+
+        if (!state._nativeSendClickHandler) {
+            state._nativeSendClickHandler = createNativeSendClickHandler();
+            document.addEventListener('click', state._nativeSendClickHandler, true);
+        }
     }
 
     function setupEditor() {
