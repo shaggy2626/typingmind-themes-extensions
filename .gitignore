@@ -6,6 +6,7 @@ extensions/prompt-perfect/
 extensions/e2b-drag-drop/
 extensions/study-prompt/
 
+temp_auto_push.bat
 # Playwright test artifacts and screenshots
 .playwright-mcp/
 
@@ -13,4 +14,5 @@ extensions/study-prompt/
 .specstory/
 
 # Assets and temporary files
-assets/
+assets/.gitignore
+temp_interactive_push.bat
